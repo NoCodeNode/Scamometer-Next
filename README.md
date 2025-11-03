@@ -60,8 +60,8 @@ Scamometer is a powerful Chrome extension that analyzes websites in real-time to
 ### Developer Mode (Current)
 1.  **Clone this repository:**
     ```bash
-    git clone https://github.com/NoCodeNode/X.git
-    cd X
+    git clone https://github.com/NoCodeNode/Samometer-Next.git
+    cd Samometer-Next
     ```
 2.  Open `chrome://extensions/` in Chrome
 3.  Enable **Developer Mode** (toggle in top-right)
