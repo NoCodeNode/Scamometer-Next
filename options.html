@@ -1,0 +1,143 @@
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Scamometer Options</title>
+    <style>
+      :root {
+        --bg:#0b1020; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+        --green:#16a34a; --yellow:#eab308; --red:#dc2626; --cyan:#06b6d4; --border:#1f2937;
+      }
+      body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif; margin:0; padding:24px; color: var(--text); background: var(--bg); max-width:1200px; margin:0 auto; }
+      h1{ font-size:28px; margin:0 0 8px; }
+      h2{ font-size:20px; margin:32px 0 16px; color: var(--cyan); }
+      h3{ font-size:16px; margin:16px 0 8px; }
+      label{ display:block; margin-top:12px; font-weight:600; font-size:14px; }
+      input, select, textarea{ width:100%; padding:10px; margin-top:6px; border-radius:10px; border:1px solid var(--border); background: var(--card); color: var(--text); font-family:inherit; font-size:14px; }
+      input:focus, select:focus, textarea:focus{ outline:none; border-color: var(--cyan); }
+      .muted{ color: var(--muted); font-size:13px; }
+      button{ padding:10px 16px; border-radius:10px; border:1px solid var(--border); background: var(--card); color: var(--text); cursor:pointer; transition: all 0.2s; font-weight:600; }
+      button:hover{ border-color: var(--cyan); background: rgba(6, 182, 212, 0.1); transform: translateY(-1px); }
+      button.primary{ background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+      button.primary:hover{ background: #0891b2; }
+      button.danger{ border-color: rgba(220,38,38,.4); color: var(--red); }
+      button.danger:hover{ background: rgba(220,38,38,.1); }
+      pre{ background: var(--bg); color: var(--text); padding:12px; border-radius:12px; border:1px solid var(--border); max-height:340px; overflow:auto; font-size:12px; }
+      .grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      .card{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; box-shadow: 0 1px 8px rgba(0,0,0,.25); margin-bottom:20px; }
+      .section{ margin-bottom:24px; }
+      .list-item{ display:flex; align-items:center; gap:12px; padding:8px; background: var(--bg); border-radius:8px; margin-top:8px; }
+      .list-item-text{ flex:1; font-size:14px; }
+      .list-item button{ padding:6px 12px; font-size:12px; }
+      .status-msg{ padding:8px 12px; border-radius:8px; margin-top:12px; font-size:13px; }
+      .status-msg.success{ background: rgba(22,163,74,.15); border:1px solid rgba(22,163,74,.3); color: var(--green); }
+      .status-msg.error{ background: rgba(220,38,38,.15); border:1px solid rgba(220,38,38,.3); color: var(--red); }
+      .help-text{ font-size:12px; color: var(--muted); margin-top:4px; }
+      .stats{ display:flex; gap:16px; margin-top:12px; }
+      .stat{ flex:1; padding:12px; background: var(--bg); border-radius:8px; text-align:center; }
+      .stat-value{ font-size:24px; font-weight:700; color: var(--cyan); }
+      .stat-label{ font-size:11px; color: var(--muted); text-transform:uppercase; margin-top:4px; }
+    </style>
+  </head>
+  <body>
+    <h1>⚙️ Scamometer Settings</h1>
+    <p class="muted">Configure your Scamometer extension. All data is stored locally in your browser.</p>
+
+    <div class="card">
+      <h2 style="margin-top:0;">API Configuration</h2>
+      <div class="section">
+        <label>Google Gemini API Key
+          <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off">
+          <div class="help-text">Get your free API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" style="color:var(--cyan)">Google AI Studio</a></div>
+        </label>
+        <label>AI Model
+          <select id="model">
+            <option value="gemini-2.5-flash-preview-09-2025">gemini-2.5-flash-preview-09-2025 (Recommended)</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro (More Accurate)</option>
+          </select>
+          <div class="help-text">Flash models are faster, Pro models are more thorough</div>
+        </label>
+        <div style="margin-top:16px; display:flex; gap:12px; align-items:center;">
+          <button id="save" class="primary">💾 Save Settings</button>
+          <span id="status" class="muted"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Whitelist & Blacklist</h2>
+      <div class="grid">
+        <div>
+          <h3>✅ Trusted Sites (Whitelist)</h3>
+          <p class="muted">Sites you trust. Always marked as safe, no analysis needed.</p>
+          <div style="display:flex; gap:8px;">
+            <input id="whitelistInput" type="text" placeholder="example.com" style="width:auto; flex:1;">
+            <button id="addWhitelist">Add</button>
+          </div>
+          <div id="whitelistItems"></div>
+        </div>
+        <div>
+          <h3>⛔ Blocked Sites (Blacklist)</h3>
+          <p class="muted">Sites you want to avoid. Always marked as dangerous.</p>
+          <div style="display:flex; gap:8px;">
+            <input id="blacklistInput" type="text" placeholder="badsite.com" style="width:auto; flex:1;">
+            <button id="addBlacklist">Add</button>
+          </div>
+          <div id="blacklistItems"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;">Storage Statistics</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value" id="storageUsed">-</div>
+          <div class="stat-label">Storage Used</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="cacheCount">-</div>
+          <div class="stat-label">Cached Analyses</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="whitelistCount">-</div>
+          <div class="stat-label">Whitelisted</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="blacklistCount">-</div>
+          <div class="stat-label">Blacklisted</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button id="clearCache">🗑️ Clear Analysis Cache</button>
+        <button id="clearAll" class="danger">⚠️ Clear All Data</button>
+      </div>
+    </div>
+
+    <h2>Diagnostics</h2>
+    <div class="grid">
+      <div>
+        <h3>DNS Test</h3>
+        <p class="muted">Google DoH then Cloudflare DoH (JSON).</p>
+        <button id="testDns">Run DNS Test</button>
+        <pre id="outDns"></pre>
+      </div>
+      <div>
+        <h3>RDAP Test</h3>
+        <p class="muted">Automatically detects IPs and finds the registrable domain.</p>
+        <button id="testRdap">Run RDAP Test</button>
+        <pre id="outRdap"></pre>
+      </div>
+    </div>
+
+    <script src="options.js"></script>
+  
+    <div class="card" style="margin-top:12px; padding:10px; border:1px solid #1f2937; border-radius:12px; background:#0f172a;">
+      <span class="muted">Built by <strong>Arnab Mandal</strong> — </span>
+      <a href="mailto:hello@arnabmandal.com" class="muted">hello@arnabmandal.com</a>
+    </div>
+    
+  </body>
+</html>

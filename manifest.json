@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Scamometer — AI Phishing & Scam Detector",
+  "version": "2.0.0",
+  "description": "Best-in-class AI-powered phishing & scam detector with history tracking, whitelist/blacklist, export features, and beautiful UI. Built by Arnab Mandal.",
+  "author": "Arnab Mandal",
+  "homepage_url": "https://arnabmandal.com",
+  "action": {
+    "default_title": "Scamometer",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://dns.google/*",
+    "https://cloudflare-dns.com/*",
+    "https://rdap.org/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "author": "Arnab Mandal (hello@arnabmandal.com)",
+  "homepage_url": "https://arnabmandal.com"
+}

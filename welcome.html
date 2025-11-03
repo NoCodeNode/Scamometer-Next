@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Welcome to Scamometer</title>
+    <style>
+      :root {
+        --bg:#0b1020; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+        --green:#16a34a; --yellow:#eab308; --red:#dc2626; --cyan:#06b6d4; --border:#1f2937;
+      }
+      * { box-sizing:border-box; }
+      body { 
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+        margin:0; padding:0; background: var(--bg); color: var(--text); 
+        min-height:100vh; display:flex; align-items:center; justify-content:center;
+      }
+      .container { max-width:700px; padding:40px 20px; }
+      .hero { text-align:center; margin-bottom:48px; }
+      .icon { font-size:80px; margin-bottom:20px; animation: float 3s ease-in-out infinite; }
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+      }
+      h1 { font-size:36px; margin:0 0 12px; background: linear-gradient(135deg, var(--cyan), var(--green)); 
+           -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+      .tagline { font-size:18px; color: var(--muted); margin:0 0 32px; }
+      .card { background: var(--card); border:1px solid var(--border); border-radius:16px; 
+              padding:24px; margin-bottom:20px; }
+      .step { display:flex; gap:20px; margin-bottom:24px; align-items:flex-start; }
+      .step:last-child { margin-bottom:0; }
+      .step-num { 
+        width:36px; height:36px; background: var(--cyan); color: var(--bg); 
+        border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-weight:700; font-size:18px; flex-shrink:0;
+      }
+      .step-content { flex:1; }
+      .step-title { font-size:18px; font-weight:600; margin:0 0 8px; }
+      .step-desc { color: var(--muted); font-size:14px; margin:0; line-height:1.6; }
+      .features { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px; }
+      .feature { padding:12px; background: var(--bg); border-radius:10px; font-size:14px; }
+      .feature-icon { display:inline-block; margin-right:8px; }
+      .cta { text-align:center; margin-top:32px; }
+      .btn { 
+        display:inline-block; padding:14px 32px; background: var(--cyan); color: var(--bg);
+        border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer;
+        text-decoration:none; transition: all 0.2s;
+      }
+      .btn:hover { background: #0891b2; transform: translateY(-2px); }
+      .btn-secondary { background: var(--card); color: var(--text); border:1px solid var(--border); margin-left:12px; }
+      .btn-secondary:hover { border-color: var(--cyan); background: rgba(6, 182, 212, 0.1); }
+      a { color: var(--cyan); text-decoration:none; }
+      a:hover { text-decoration:underline; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="hero">
+        <div class="icon">🧪</div>
+        <h1>Welcome to Scamometer</h1>
+        <p class="tagline">Your AI-powered shield against phishing and scams</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0; color:var(--cyan);">Quick Setup Guide</h2>
+        
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Get Your API Key</div>
+            <div class="step-desc">
+              Visit <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a> 
+              and create a free API key. It takes less than a minute!
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Configure Scamometer</div>
+            <div class="step-desc">
+              Open the Options page and paste your API key. Choose your preferred AI model 
+              (we recommend gemini-2.5-flash for the best balance of speed and accuracy).
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Start Browsing Safely</div>
+            <div class="step-desc">
+              That's it! Scamometer will now automatically analyze websites as you browse. 
+              Click the extension icon to see detailed reports and risk scores.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0; color:var(--cyan);">What You Get</h2>
+        <div class="features">
+          <div class="feature">
+            <span class="feature-icon">🎯</span> Real-time AI threat detection
+          </div>
+          <div class="feature">
+            <span class="feature-icon">📊</span> Comprehensive scan history
+          </div>
+          <div class="feature">
+            <span class="feature-icon">⭐</span> Whitelist/Blacklist management
+          </div>
+          <div class="feature">
+            <span class="feature-icon">⌨️</span> Keyboard shortcuts
+          </div>
+          <div class="feature">
+            <span class="feature-icon">📤</span> Export & share reports
+          </div>
+          <div class="feature">
+            <span class="feature-icon">🔒</span> 100% privacy-focused
+          </div>
+          <div class="feature">
+            <span class="feature-icon">⚡</span> Lightning-fast analysis
+          </div>
+          <div class="feature">
+            <span class="feature-icon">🎨</span> Beautiful dark theme
+          </div>
+        </div>
+      </div>
+
+      <div class="cta">
+        <a href="options.html" class="btn">🚀 Set Up API Key</a>
+        <a href="https://github.com/NoCodeNode/X" target="_blank" class="btn btn-secondary">📖 Learn More</a>
+      </div>
+
+      <div style="text-align:center; margin-top:32px; color:var(--muted); font-size:13px;">
+        Built with ❤️ by <strong>Arnab Mandal</strong> • 
+        <a href="mailto:hello@arnabmandal.com">hello@arnabmandal.com</a>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,185 @@
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Scamometer</title>
+    <style>
+      :root {
+        --bg:#0b1020; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+        --green:#16a34a; --yellow:#eab308; --red:#dc2626; --cyan:#06b6d4; --border:#1f2937;
+      }
+      *{box-sizing:border-box}
+      body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+            margin:0; padding:12px; width: 400px; background: var(--bg); color: var(--text); }
+      h1{ font-size:16px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+      .card{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; box-shadow: 0 1px 8px rgba(0,0,0,.25); transition: transform 0.2s, box-shadow 0.2s; }
+      .card:hover{ box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+      .row{ display:flex; gap:10px; align-items:center; }
+      .col{ display:flex; flex-direction:column; gap:8px; }
+      .muted{ color: var(--muted); font-size:12px; }
+      button{ padding:8px 10px; border-radius:10px; border:1px solid var(--border); background: transparent; color: var(--text); cursor:pointer; transition: all 0.2s; }
+      button:hover{ border-color: var(--cyan); background: rgba(6, 182, 212, 0.1); transform: translateY(-1px); }
+      button:active{ transform: translateY(0); }
+      .gauge{ width: 180px; height: 100px; }
+      .tags{ display:flex; flex-wrap: wrap; gap:6px; }
+      .tag{ font-size:11px; padding:4px 6px; border-radius:999px; border:1px solid var(--border); transition: transform 0.2s; }
+      .tag:hover{ transform: scale(1.05); }
+      .tag.pos{ border-color: rgba(22,163,74,.4); background: rgba(22,163,74,.1); }
+      .tag.neg{ border-color: rgba(220,38,38,.4); background: rgba(220,38,38,.1); }
+      pre{ background:#0b1020; color:#e2e8f0; padding:10px; border-radius:12px; border:1px solid var(--border); max-height:220px; overflow:auto; font-size:11px; }
+      .pill{ font-size:12px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); }
+      .pill.low{ color: var(--green); border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.1); }
+      .pill.med{ color: var(--yellow); border-color: rgba(234,179,8,.35); background: rgba(234,179,8,.1); }
+      .pill.high{ color: var(--red); border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.1); }
+      .toolbar{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+      .kicker{ display:none; }
+      .progress{ display:flex; align-items:center; gap:8px; }
+      .bar{ width:100%; height:8px; background:#111827; border-radius:999px; overflow:hidden; border:1px solid var(--border); }
+      .bar>div{ height: 100%; width:0%; background: var(--cyan); transition: width .2s ease; }
+      a{ color: var(--cyan); text-decoration: none; }
+      a:hover{ text-decoration: underline; }
+      .quick-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+      .quick-btn{ font-size:11px; padding:6px 10px; display:flex; align-items:center; gap:4px; }
+      .badge{ 
+        position:absolute; top:8px; right:8px; 
+        font-size:10px; padding:2px 6px; border-radius:999px;
+        background: var(--cyan); color: var(--bg); font-weight:600;
+      }
+      .header-actions{ display:flex; gap:6px; align-items:center; }
+      .icon-btn{ 
+        width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center;
+        border-radius:8px; font-size:16px; border:1px solid var(--border);
+      }
+      .tooltip{ position:relative; }
+      .tooltip:hover::after{ 
+        content: attr(data-tooltip); position:absolute; bottom:100%; left:50%; 
+        transform: translateX(-50%); padding:4px 8px; background:#1f2937; 
+        border-radius:6px; font-size:11px; white-space:nowrap; margin-bottom:4px;
+        z-index:1000;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+      .analyzing{ animation: pulse 1.5s ease-in-out infinite; }
+      .domain-info{ display:flex; align-items:center; gap:8px; padding:8px; background:#0b1020; border-radius:8px; margin-top:8px; }
+      .domain-icon{ font-size:20px; }
+      .domain-text{ flex:1; min-width:0; }
+      .domain-url{ font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .collapsible-header{ cursor:pointer; user-select:none; display:flex; justify-content:space-between; align-items:center; padding:8px 0; }
+      .collapsible-header:hover{ color: var(--cyan); }
+      .collapsible-content{ max-height:0; overflow:hidden; transition: max-height 0.3s ease; }
+      .collapsible-content.open{ max-height:500px; }
+      .chevron{ transition: transform 0.3s; }
+      .chevron.open{ transform: rotate(180deg); }
+    </style>
+  </head>
+  <body>
+  <div id="statusArea" style="display:none; margin-bottom:10px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span id="hourglass" aria-hidden="true" style="font-size:18px;">⏳</span>
+      <span class="muted" id="statusText">Analyzing…</span>
+    </div>
+  </div>
+
+    <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+      <h1>🧪 Scamometer</h1>
+      <div class="header-actions">
+        <button class="icon-btn tooltip" id="historyBtn" data-tooltip="View History" title="History">📊</button>
+        <button class="icon-btn tooltip" id="whitelistBtn" data-tooltip="Whitelist/Blacklist" title="Lists">⭐</button>
+        <button class="icon-btn tooltip" id="shareBtn" data-tooltip="Share Report" title="Share">📤</button>
+      </div>
+    </div>
+
+    <div id="needKey" class="card" style="display:none">
+      <div class="muted">Add your Gemini API key in <a href="#" id="openOptions">Options</a> to enable analysis.</div>
+    </div>
+
+    <div id="kickoff" class="card" style="display:none">
+      <div class="row">
+        <div class="col" style="flex:1">
+          <div class="muted">Starting analysis…</div>
+          <div class="progress">
+            <div class="bar"><div id="kickbar"></div></div>
+            <div class="muted" id="kickpct">0%</div>
+          </div>
+        </div>
+        <button id="cancelKick" title="Close">Close</button>
+      </div>
+    </div>
+
+    <div id="content" class="col" style="display:none">
+      <div class="card row" style="justify-content:space-between">
+        <div class="row" style="gap:14px">
+          <svg class="gauge" viewBox="0 0 100 60" aria-label="Scamometer">
+            <defs>
+              <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#16a34a"/>
+                <stop offset="55%" stop-color="#eab308"/>
+                <stop offset="100%" stop-color="#dc2626"/>
+              </linearGradient>
+            </defs>
+            <path d="M10,50 A40,40 0 0,1 90,50" stroke="url(#g)" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <circle id="needle" cx="50" cy="50" r="2" fill="#e2e8f0"/>
+            <line id="hand" x1="50" y1="50" x2="50" y2="15" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round"/>
+            <text id="scoreText" x="50" y="57" text-anchor="middle" font-size="10" fill="#e2e8f0">0 / 100</text>
+          </svg>
+          <div class="col">
+            <div id="verdict" style="font-size:18px; font-weight:600">—</div>
+            <div id="riskpill" class="pill low">Low risk</div>
+            <div class="muted" id="reason">—</div>
+          </div>
+        </div>
+        <div class="col" style="align-items:flex-end">
+          <button id="reanalyze" title="Run again">Re-run</button>
+        </div>
+      </div>
+
+      <div class="row" style="gap:12px">
+        <div class="card" style="flex:1">
+          <div class="muted">Positives</div>
+          <div id="positives" class="tags"></div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="muted">Red Flags</div>
+          <div id="negatives" class="tags"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="collapsible-header" id="rawToggle">
+          <div class="muted">Technical Details</div>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="collapsible-content" id="rawContent">
+          <div class="muted" style="margin-top:8px;">Raw JSON sent to AI</div>
+          <pre id="raw"></pre>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="quick-actions">
+          <button class="quick-btn" id="openOptions2">⚙️ Options</button>
+          <button class="quick-btn" id="copyReportBtn">📋 Copy</button>
+          <button class="quick-btn" id="exportPdfBtn">📄 Export</button>
+        </div>
+        <div class="muted" id="timestamp">—</div>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  
+      <div class="card" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+        <div class="muted">Built by <strong>Arnab Mandal</strong></div>
+        <a href="mailto:hello@arnabmandal.com" class="muted" title="Email Arnab Mandal">hello@arnabmandal.com</a>
+      </div>
+    
+  
+  <div id="meterHooks" style="display:none;">
+    <div id="scoreMeter"></div>
+    <div id="scoreText"></div>
+  </div>
+
+</body>
+</html>

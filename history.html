@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Scamometer History</title>
+    <style>
+      :root {
+        --bg:#0b1020; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+        --green:#16a34a; --yellow:#eab308; --red:#dc2626; --cyan:#06b6d4; --border:#1f2937;
+      }
+      *{box-sizing:border-box}
+      body{ 
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+        margin:0; padding:20px; background: var(--bg); color: var(--text); 
+        max-width: 1200px; margin: 0 auto;
+      }
+      h1{ font-size:24px; margin:0 0 16px; display:flex; align-items:center; gap:12px; }
+      .header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+      .stats-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px; }
+      .stat-card{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; }
+      .stat-value{ font-size:32px; font-weight:700; margin:8px 0; }
+      .stat-label{ color: var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:0.5px; }
+      .card{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; box-shadow: 0 1px 8px rgba(0,0,0,.25); margin-bottom:16px; }
+      .muted{ color: var(--muted); font-size:13px; }
+      .history-item{ display:grid; grid-template-columns: auto 1fr auto auto; gap:16px; align-items:center; padding:12px; border-bottom:1px solid var(--border); }
+      .history-item:last-child{ border-bottom:none; }
+      .history-item:hover{ background: rgba(6, 182, 212, 0.05); }
+      .score-badge{ 
+        width:48px; height:48px; border-radius:50%; 
+        display:flex; align-items:center; justify-content:center;
+        font-weight:700; font-size:16px; border:2px solid;
+      }
+      .score-badge.low{ background: rgba(22,163,74,.15); border-color: var(--green); color: var(--green); }
+      .score-badge.med{ background: rgba(234,179,8,.15); border-color: var(--yellow); color: var(--yellow); }
+      .score-badge.high{ background: rgba(220,38,38,.15); border-color: var(--red); color: var(--red); }
+      .site-info{ flex:1; min-width:0; }
+      .site-url{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
+      .site-time{ color: var(--muted); font-size:12px; }
+      button{ 
+        padding:8px 14px; border-radius:10px; border:1px solid var(--border); 
+        background: transparent; color: var(--text); cursor:pointer; 
+        transition: all 0.2s;
+      }
+      button:hover{ border-color: var(--cyan); background: rgba(6, 182, 212, 0.1); }
+      button.danger{ border-color: rgba(220,38,38,.4); color: var(--red); }
+      button.danger:hover{ background: rgba(220,38,38,.1); }
+      .empty-state{ text-align:center; padding:60px 20px; }
+      .empty-icon{ font-size:64px; margin-bottom:16px; opacity:0.5; }
+      .toolbar{ display:flex; gap:12px; align-items:center; }
+      .search-box{ 
+        flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--border);
+        background: var(--card); color: var(--text); font-size:14px;
+      }
+      .chart-container{ position:relative; height:200px; margin:20px 0; }
+      a{ color: var(--cyan); text-decoration: none; }
+      a:hover{ text-decoration: underline; }
+      .filter-buttons{ display:flex; gap:8px; flex-wrap:wrap; }
+      .filter-btn{ 
+        font-size:12px; padding:6px 12px; border-radius:20px; 
+        border:1px solid var(--border); background: transparent; color: var(--muted);
+        cursor:pointer; transition: all 0.2s;
+      }
+      .filter-btn.active{ background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+      .action-icons{ display:flex; gap:8px; }
+      .icon-btn{ 
+        width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+        border-radius:8px; border:1px solid var(--border); background: transparent;
+        cursor:pointer; transition: all 0.2s; font-size:16px;
+      }
+      .icon-btn:hover{ border-color: var(--cyan); background: rgba(6, 182, 212, 0.1); }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🕒 Scan History</h1>
+      <div class="toolbar">
+        <button id="exportBtn">📥 Export</button>
+        <button id="clearBtn" class="danger">🗑️ Clear All</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Scans</div>
+        <div class="stat-value" id="totalScans">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">High Risk</div>
+        <div class="stat-value" style="color:var(--red)" id="highRisk">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Medium Risk</div>
+        <div class="stat-value" style="color:var(--yellow)" id="mediumRisk">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Low Risk</div>
+        <div class="stat-value" style="color:var(--green)" id="lowRisk">0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div class="filter-buttons" id="filterButtons">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="high">High Risk</button>
+          <button class="filter-btn" data-filter="medium">Medium Risk</button>
+          <button class="filter-btn" data-filter="low">Low Risk</button>
+        </div>
+        <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search history...">
+      </div>
+
+      <div id="historyList"></div>
+      
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">📊</div>
+        <h2>No scan history yet</h2>
+        <p class="muted">Start browsing and Scamometer will automatically analyze websites for you.</p>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="muted">Built by <strong>Arnab Mandal</strong></div>
+      <a href="mailto:hello@arnabmandal.com" class="muted">hello@arnabmandal.com</a>
+    </div>
+
+    <script src="history.js"></script>
+  </body>
+</html>
