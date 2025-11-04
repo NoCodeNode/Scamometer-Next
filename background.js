@@ -11,7 +11,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 const SCAM_THRESHOLD = 70;
 const DNS_TYPES = ['A','AAAA','CNAME','MX','NS','TXT','SOA','SRV','DNSKEY','DS','CAA'];
 const REQUEST_TIMEOUT_MS = 12000;
-const MODEL_DEFAULT = 'gemini-2.5-flash-preview-09-2025';
+const MODEL_DEFAULT = 'gemini-2.5-flash';
 const DNS_CACHE_TTL = 24*60*60*1000;
 const RDAP_CACHE_TTL = 24*60*60*1000;
 
@@ -366,3 +366,4 @@ async function callGemini(apiKey, model, analysis) {
     throw new Error('Invalid JSON from Gemini');
   }
 }
+
