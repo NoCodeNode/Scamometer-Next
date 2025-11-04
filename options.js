@@ -1,5 +1,5 @@
 // Built by Arnab Mandal — contact: hello@arnabmandal.com
-const MODEL_DEFAULT = 'gemini-2.5-flash-preview-09-2025';
+const MODEL_DEFAULT = 'gemini-2.5-flash';
 
 async function load() {
   const { apiKey, modelName, whitelist = [], blacklist = [] } = await chrome.storage.local.get({ 
@@ -288,3 +288,4 @@ document.getElementById('blacklistInput').addEventListener('keypress', (e) => {
 });
 
 load();
+
