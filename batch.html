@@ -127,6 +127,17 @@
       background: #0891b2;
     }
     
+    #retryBtn {
+      background: #f59e0b;
+      border-color: #f59e0b;
+      color: white;
+    }
+    
+    #retryBtn:hover {
+      background: #d97706;
+      border-color: #d97706;
+    }
+    
     .progress-section {
       display: none;
     }
@@ -388,6 +399,7 @@
       </div>
       <div class="controls">
         <button class="primary" id="startBtn" disabled>🚀 Start Batch Analysis</button>
+        <button id="retryBtn" style="display: none;">🔄 Retry Failed URLs</button>
         <button id="clearBtn">🗑️ Clear</button>
       </div>
       <div id="fileInfo" style="margin-top: 16px; color: var(--muted); display: none;"></div>

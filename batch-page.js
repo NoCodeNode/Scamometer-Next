@@ -43,6 +43,7 @@ function setupEventListeners() {
   
   // Buttons
   document.getElementById('startBtn').onclick = startBatch;
+  document.getElementById('retryBtn').onclick = retryFailedUrls;
   document.getElementById('clearBtn').onclick = clearUpload;
   document.getElementById('pauseBtn').onclick = pauseBatch;
   document.getElementById('resumeBtn').onclick = resumeBatch;
@@ -265,7 +266,70 @@ function renderResultsTable() {
       </tr>
     `;
   }).join('');
+  
+  // Show or hide retry button based on failed URLs
+  updateRetryButton();
 }
+
+function updateRetryButton() {
+  const failedUrls = batchResults.filter(r => r.status === 'failed');
+  const retryBtn = document.getElementById('retryBtn');
+  
+  if (failedUrls.length > 0) {
+    retryBtn.style.display = 'inline-block';
+    retryBtn.textContent = `🔄 Retry ${failedUrls.length} Failed URL${failedUrls.length > 1 ? 's' : ''}`;
+  } else {
+    retryBtn.style.display = 'none';
+  }
+}
+
+async function retryFailedUrls() {
+  // Get all failed URLs
+  const failedResults = batchResults.filter(r => r.status === 'failed');
+  
+  if (failedResults.length === 0) {
+    showToast('No failed URLs to retry', true);
+    return;
+  }
+  
+  const failedUrls = failedResults.map(r => r.url);
+  showToast(`🔄 Retrying ${failedUrls.length} failed URL(s)...`);
+  
+  // Reset status for failed URLs in batchResults
+  failedResults.forEach(result => {
+    result.status = 'pending';
+    result.error = null;
+  });
+  
+  // Hide retry button during processing
+  document.getElementById('retryBtn').style.display = 'none';
+  
+  // Create a new batch with only failed URLs
+  const retryBatch = {
+    urls: failedUrls.map((url, idx) => ({
+      url: url,
+      index: batchResults.findIndex(r => r.url === url && r.status === 'pending')
+    })),
+    currentIndex: 0,
+    status: 'processing'
+  };
+  
+  // Save to storage
+  await chrome.storage.local.set({ 'batch::queue': retryBatch });
+  
+  // Start processing the retry batch
+  await chrome.runtime.sendMessage({ type: 'START_BATCH', urls: failedUrls });
+  
+  // Show progress section
+  document.getElementById('progressSection').classList.add('active');
+  document.getElementById('resultsSection').style.display = 'none';
+  
+  // Start polling for updates
+  pollBatchStatus();
+  
+  showToast(`Started retry for ${failedUrls.length} URL(s)`);
+}
+
 
 window.viewResult = function(index) {
   const result = batchResults[index];
