@@ -116,6 +116,48 @@
       </div>
     </div>
 
+    <h2>Webhook Integration</h2>
+    <div class="card">
+      <p class="muted">Configure webhook to receive batch processing results automatically. The extension will POST results to your endpoint when batch processing completes.</p>
+      
+      <div class="section">
+        <label>
+          <input type="checkbox" id="webhookEnabled" style="width:auto; margin-right:8px;">
+          Enable Webhook Notifications
+        </label>
+        <div class="help-text">Send POST requests with batch results to the configured URL</div>
+      </div>
+      
+      <div class="section">
+        <label>Webhook URL
+          <input type="url" id="webhookUrl" placeholder="https://your-server.com/api/webhook">
+        </label>
+        <div class="help-text">The URL where batch results will be sent via POST request</div>
+      </div>
+      
+      <div class="section">
+        <label>Authorization Header (Optional)
+          <input type="text" id="webhookAuth" placeholder="Bearer your-token-here">
+        </label>
+        <div class="help-text">Optional: Authorization header value for authenticated endpoints</div>
+      </div>
+      
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button id="saveWebhook" class="primary">Save Webhook Config</button>
+        <button id="testWebhook">Test Webhook</button>
+      </div>
+      <div id="webhookStatus"></div>
+      
+      <h3 style="margin-top:24px;">External API Access</h3>
+      <p class="muted">Allow external websites to trigger batch processing via chrome.runtime.sendMessage. Add trusted domain origins below.</p>
+      
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input type="text" id="newWebhookDomain" placeholder="https://example.com" style="flex:1;">
+        <button id="addWebhookDomain">Add Domain</button>
+      </div>
+      <div id="webhookDomains" style="margin-top:12px;"></div>
+    </div>
+
     <h2>Diagnostics</h2>
     <div class="grid">
       <div>

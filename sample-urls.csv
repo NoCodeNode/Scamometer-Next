@@ -1,0 +1,14 @@
+# Sample CSV for Batch Processing
+# Format: One URL per row in first column
+# Lines starting with # are comments and will be skipped
+
+https://google.com
+https://github.com
+https://example.com
+https://wikipedia.org
+https://stackoverflow.com
+https://reddit.com
+https://twitter.com
+https://linkedin.com
+https://microsoft.com
+https://apple.com

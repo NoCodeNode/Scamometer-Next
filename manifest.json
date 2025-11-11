@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scamometer — AI Phishing & Scam Detector",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Best-in-class AI-powered phishing & scam detector with history tracking, whitelist/blacklist, export features, and beautiful UI. Built by Arnab Mandal.",
   "author": "Arnab Mandal",
   "homepage_url": "https://arnabmandal.com",
@@ -24,9 +24,12 @@
   "permissions": [
     "storage",
     "tabs",
-    "scripting"
+    "scripting",
+    "downloads",
+    "activeTab"
   ],
   "host_permissions": [
+    "<all_urls>",
     "https://dns.google/*",
     "https://cloudflare-dns.com/*",
     "https://rdap.org/*",

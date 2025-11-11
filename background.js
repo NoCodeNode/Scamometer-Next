@@ -2,11 +2,16 @@
 
 // background.js — updated v2.0 (best-in-class features)
 
+// Import webhook functionality
+import { sendWebhookNotification, registerWebhookListener } from './webhook.js';
+
 // Show welcome page on first install
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
   }
+  // Register webhook listener
+  registerWebhookListener();
 });
 const SCAM_THRESHOLD = 70;
 const DNS_TYPES = ['A','AAAA','CNAME','MX','NS','TXT','SOA','SRV','DNSKEY','DS','CAA'];
@@ -28,6 +33,14 @@ function storageKey(url) {
 // Listen for page loads to auto-run analysis
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
+  
+  // Check if extension is enabled
+  const { enabled = true } = await chrome.storage.local.get({ enabled: true });
+  if (!enabled) {
+    await setBadge({ text: '', color: '#6b7280' });
+    return;
+  }
+  
   try {
     await runAnalysis(tabId, tab.url, { reason: 'tab_complete' });
   } catch (e) {
@@ -36,6 +49,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     progress(tabId, 100, 'Failed');
   }
 });
+
+// Batch processing state
+let batchProcessingActive = false;
+let batchTabId = null;
 
 // Listen for messages from popup or content
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -51,6 +68,66 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
+      }
+    }
+    if (msg?.type === 'START_BATCH') {
+      try {
+        startBatchProcessing(msg.urls);
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }
+    if (msg?.type === 'PAUSE_BATCH') {
+      try {
+        await pauseBatchProcessing();
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }
+    if (msg?.type === 'RESUME_BATCH') {
+      try {
+        resumeBatchProcessing();
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }
+    if (msg?.type === 'STOP_BATCH') {
+      try {
+        await stopBatchProcessing();
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }
+    if (msg?.type === 'CAPTURE_SCREENSHOT') {
+      try {
+        const screenshot = await captureScreenshotWithOverlay(msg.tabId, msg.url);
+        sendResponse({ ok: true, screenshot });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }
+    if (msg?.type === 'GET_BATCH_STATUS') {
+      const data = await chrome.storage.local.get('batch::status');
+      sendResponse(data['batch::status'] || null);
+    }
+    if (msg?.type === 'GET_BATCH_RESULTS') {
+      const data = await chrome.storage.local.get('batch::queue');
+      const queue = data['batch::queue'];
+      if (queue) {
+        const results = {
+          total: queue.urls.length,
+          completed: queue.urls.filter(u => u.status === 'completed').length,
+          failed: queue.urls.filter(u => u.status === 'failed').length,
+          pending: queue.urls.filter(u => u.status === 'pending').length,
+          results: queue.urls
+        };
+        sendResponse(results);
+      } else {
+        sendResponse(null);
       }
     }
   })();
@@ -201,7 +278,8 @@ async function runAnalysis(tabId, url, { reason } = {}) {
 
   // Store analysis in chrome.storage.local
   const key = storageKey(url);
-  await chrome.storage.local.set({ [key]: { when: Date.now(), url, ai, raw: payload, dnsResults, rdap } });
+  const analysisResult = { when: Date.now(), url, ai, raw: payload, dnsResults, rdap };
+  await chrome.storage.local.set({ [key]: analysisResult });
 
   // Update badge with final score
   await setBadgeForScore(ai.scamometer);
@@ -214,6 +292,29 @@ async function runAnalysis(tabId, url, { reason } = {}) {
   try {
     chrome.runtime.sendMessage({ type: 'analysis_complete', tabId, score: ai.scamometer });
   } catch {}
+  
+  // Send webhook notification for single URL analysis (if not part of batch)
+  if (reason !== 'batch') {
+    try {
+      const { webhookEnabled = false } = await chrome.storage.local.get({ webhookEnabled: false });
+      if (webhookEnabled) {
+        await sendWebhookNotification({
+          total: 1,
+          completed: 1,
+          failed: 0,
+          pending: 0,
+          results: [{
+            url: url,
+            status: 'completed',
+            result: analysisResult,
+            screenshot: null
+          }]
+        });
+      }
+    } catch (e) {
+      console.error('Webhook notification failed for single URL:', e);
+    }
+  }
 }
 
 // Helper: fetch with timeout
@@ -352,10 +453,24 @@ async function callGemini(apiKey, model, analysis) {
     method: "POST", headers: { "content-type": "application/json" }, 
     body: JSON.stringify(body) 
   }, 20000);
+  
+  // Check for API key errors
   if (!res.ok) {
     const t = await res.text().catch(() => '');
+    if (res.status === 401 || res.status === 403) {
+      // API key error - pause batch if active
+      if (batchProcessingActive) {
+        await pauseBatchProcessing();
+        // Notify popup to show API key dialog
+        try {
+          chrome.runtime.sendMessage({ type: 'API_KEY_ERROR', status: res.status });
+        } catch {}
+      }
+      throw new Error(`Gemini API authentication error: ${res.status}`);
+    }
     throw new Error(`Gemini API error: ${res.status} ${t}`);
   }
+  
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   try {
@@ -365,5 +480,380 @@ async function callGemini(apiKey, model, analysis) {
     if (m) return JSON.parse(m[0]);
     throw new Error('Invalid JSON from Gemini');
   }
+}
+
+// ============================================================================
+// BATCH PROCESSING FUNCTIONS
+// ============================================================================
+
+/**
+ * Start batch processing of URLs
+ * @param {Array<string>} urls - URLs to process
+ */
+async function startBatchProcessing(urls) {
+  if (batchProcessingActive) {
+    throw new Error('Batch processing already active');
+  }
+  
+  // Initialize queue
+  const queue = {
+    urls: urls.map((url, index) => ({
+      url,
+      index,
+      status: 'pending',
+      result: null,
+      error: null,
+      screenshot: null
+    })),
+    currentIndex: 0,
+    status: 'processing',
+    createdAt: Date.now(),
+    completedAt: null
+  };
+  
+  await chrome.storage.local.set({ 'batch::queue': queue });
+  await updateBatchStatus('initialized', 0, urls.length);
+  
+  batchProcessingActive = true;
+  processNextBatchUrl();
+}
+
+/**
+ * Process next URL in batch queue
+ */
+async function processNextBatchUrl() {
+  if (!batchProcessingActive) return;
+  
+  const data = await chrome.storage.local.get('batch::queue');
+  const queue = data['batch::queue'];
+  
+  if (!queue) {
+    batchProcessingActive = false;
+    return;
+  }
+  
+  // Find next pending URL
+  const nextUrl = queue.urls.find(u => u.status === 'pending');
+  
+  if (!nextUrl) {
+    // All done
+    queue.status = 'completed';
+    queue.completedAt = Date.now();
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    await updateBatchStatus('completed', queue.urls.length, queue.urls.length);
+    batchProcessingActive = false;
+    
+    // Send webhook notification
+    try {
+      const results = {
+        total: queue.urls.length,
+        completed: queue.urls.filter(u => u.status === 'completed').length,
+        failed: queue.urls.filter(u => u.status === 'failed').length,
+        pending: queue.urls.filter(u => u.status === 'pending').length,
+        results: queue.urls
+      };
+      await sendWebhookNotification(results);
+    } catch (e) {
+      console.error('Webhook notification failed:', e);
+    }
+    
+    // Notify popup
+    try {
+      chrome.runtime.sendMessage({ type: 'BATCH_COMPLETE' });
+    } catch {}
+    return;
+  }
+  
+  // Mark as processing
+  nextUrl.status = 'processing';
+  await chrome.storage.local.set({ 'batch::queue': queue });
+  await updateBatchStatus('processing', nextUrl.index, queue.urls.length);
+  
+  try {
+    // Open URL in a NEW WINDOW (not tab) for better isolation
+    const window = await chrome.windows.create({
+      url: nextUrl.url,
+      focused: false,
+      state: 'minimized',
+      type: 'normal'
+    });
+    
+    const tab = window.tabs[0];
+    batchTabId = tab.id;
+    const batchWindowId = window.id;
+    
+    // Wait for page to load
+    await waitForTabLoad(tab.id);
+    
+    // Additional wait for content script to be ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Run analysis
+    await runAnalysis(tab.id, nextUrl.url, { reason: 'batch' });
+    
+    // Capture screenshot
+    const screenshot = await captureScreenshotWithOverlay(tab.id, nextUrl.url);
+    
+    // Get result
+    const key = storageKey(nextUrl.url);
+    const resultData = await chrome.storage.local.get(key);
+    const result = resultData[key];
+    
+    // Update queue
+    nextUrl.status = 'completed';
+    nextUrl.result = result;
+    nextUrl.screenshot = screenshot;
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    
+    // Send individual webhook notification for this URL
+    try {
+      const { webhookEnabled = false } = await chrome.storage.local.get({ webhookEnabled: false });
+      if (webhookEnabled) {
+        await sendWebhookNotification({
+          total: 1,
+          completed: 1,
+          failed: 0,
+          pending: 0,
+          results: [{
+            url: nextUrl.url,
+            status: 'completed',
+            result: result,
+            screenshot: screenshot
+          }]
+        });
+      }
+    } catch (e) {
+      console.error('Individual webhook notification failed:', e);
+    }
+    
+    // Close window (not just tab)
+    await chrome.windows.remove(batchWindowId);
+    batchTabId = null;
+    
+    // Process next after a short delay
+    setTimeout(() => processNextBatchUrl(), 1000);
+    
+  } catch (error) {
+    console.error('Batch processing error:', error);
+    nextUrl.status = 'failed';
+    nextUrl.error = error.message;
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    
+    // Close tab if open
+    if (batchTabId) {
+      try {
+        await chrome.tabs.remove(batchTabId);
+      } catch {}
+      batchTabId = null;
+    }
+    
+    // Continue with next URL
+    setTimeout(() => processNextBatchUrl(), 1000);
+  }
+}
+
+/**
+ * Pause batch processing
+ */
+async function pauseBatchProcessing() {
+  batchProcessingActive = false;
+  const data = await chrome.storage.local.get('batch::queue');
+  const queue = data['batch::queue'];
+  if (queue) {
+    queue.status = 'paused';
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    const completed = queue.urls.filter(u => u.status === 'completed' || u.status === 'failed').length;
+    await updateBatchStatus('paused', completed, queue.urls.length);
+  }
+  
+  // Close batch tab if open
+  if (batchTabId) {
+    try {
+      await chrome.tabs.remove(batchTabId);
+    } catch {}
+    batchTabId = null;
+  }
+}
+
+/**
+ * Resume batch processing
+ */
+async function resumeBatchProcessing() {
+  const data = await chrome.storage.local.get('batch::queue');
+  const queue = data['batch::queue'];
+  if (queue && queue.status === 'paused') {
+    queue.status = 'processing';
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    batchProcessingActive = true;
+    processNextBatchUrl();
+  }
+}
+
+async function stopBatchProcessing() {
+  batchProcessingActive = false;
+  const data = await chrome.storage.local.get('batch::queue');
+  const queue = data['batch::queue'];
+  if (queue) {
+    queue.status = 'completed';
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    const completed = queue.urls.filter(u => u.status === 'completed').length;
+    const failed = queue.urls.filter(u => u.status === 'failed').length;
+    await updateBatchStatus('completed', completed + failed, queue.urls.length);
+  }
+}
+
+/**
+ * Wait for tab to finish loading
+ * @param {number} tabId - Tab ID
+ * @returns {Promise<void>}
+ */
+function waitForTabLoad(tabId) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      listener && chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('Tab load timeout'));
+    }, 30000);
+    
+    const listener = (updatedTabId, changeInfo, tab) => {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(listener);
+        // Wait a bit more for dynamic content
+        setTimeout(() => resolve(), 2000);
+      }
+    };
+    
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+/**
+ * Capture screenshot with timestamp overlay
+ * @param {number} tabId - Tab ID
+ * @param {string} url - Page URL
+ * @returns {Promise<Object>} - Screenshot info
+ */
+async function captureScreenshotWithOverlay(tabId, url) {
+  try {
+    // Get the tab and make window visible for screenshot
+    const tab = await chrome.tabs.get(tabId);
+    await chrome.windows.update(tab.windowId, { 
+      state: 'normal',
+      focused: true 
+    });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Inject overlay with URL and timestamp
+    const timestamp = formatTimestamp(new Date());
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (url, timestamp) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'scamometer-screenshot-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        overlay.style.color = 'white';
+        overlay.style.padding = '16px 20px';
+        overlay.style.zIndex = '2147483647';
+        overlay.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        overlay.style.fontSize = '14px';
+        overlay.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        overlay.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🧪 ${url}</div>
+            <div style="margin-left:20px; white-space:nowrap; font-weight:600;">${timestamp}</div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      },
+      args: [url, timestamp]
+    });
+    
+    // Wait for overlay to render
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Capture screenshot
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 100 });
+    
+    // Remove overlay
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const overlay = document.getElementById('scamometer-screenshot-overlay');
+        if (overlay) overlay.remove();
+      }
+    }).catch(() => {}); // Ignore errors if tab is closed
+    
+    // Calculate SHA-256 hash
+    const base64 = dataUrl.split(',')[1];
+    const binary = atob(base64);
+    const buffer = new ArrayBuffer(binary.length);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < binary.length; i++) {
+      view[i] = binary.charCodeAt(i);
+    }
+    
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Create filename with timestamp for better organization
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9]/gi, '_');
+    const filename = `${hostname}_${hash.substring(0, 12)}.png`;
+    
+    // Download screenshot to scamometer_reports folder
+    await chrome.downloads.download({
+      url: dataUrl,
+      filename: `scamometer_reports/${filename}`,
+      saveAs: false
+    });
+    
+    return {
+      hash,
+      timestamp,
+      filename: filename
+      // No dataUrl - HTML reports will use relative paths to the downloaded files
+    };
+  } catch (error) {
+    console.error('Screenshot capture failed:', error);
+    // Return null if screenshot fails, but don't fail the whole analysis
+    return null;
+  }
+}
+
+/**
+ * Format timestamp as YYYY-MM-DD HH:MM:SS
+ * @param {Date} date - Date object
+ * @returns {string} - Formatted timestamp
+ */
+function formatTimestamp(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Update batch status
+ * @param {string} status - Status message
+ * @param {number} current - Current index
+ * @param {number} total - Total URLs
+ */
+async function updateBatchStatus(status, current, total) {
+  await chrome.storage.local.set({
+    'batch::status': {
+      status,
+      current,
+      total,
+      percentage: total > 0 ? Math.round((current / total) * 100) : 0,
+      timestamp: Date.now()
+    }
+  });
 }
 

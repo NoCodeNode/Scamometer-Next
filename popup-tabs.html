@@ -1,0 +1,435 @@
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Scamometer</title>
+    <style>
+      :root {
+        --bg:#0b1020; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+        --green:#16a34a; --yellow:#eab308; --red:#dc2626; --cyan:#06b6d4; --border:#1f2937;
+      }
+      *{box-sizing:border-box}
+      body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+            margin:0; padding:0; width: 500px; min-height: 400px; background: var(--bg); color: var(--text); }
+      
+      /* Tab Navigation */
+      .tabs {
+        display: flex;
+        background: var(--card);
+        border-bottom: 1px solid var(--border);
+      }
+      .tab {
+        flex: 1;
+        padding: 12px 16px;
+        text-align: center;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .tab:hover {
+        background: rgba(6, 182, 212, 0.1);
+      }
+      .tab.active {
+        border-bottom-color: var(--cyan);
+        color: var(--cyan);
+      }
+      
+      /* Tab Content */
+      .tab-content {
+        display: none;
+        padding: 12px;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      
+      h1{ font-size:16px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+      .card{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; box-shadow: 0 1px 8px rgba(0,0,0,.25); transition: transform 0.2s, box-shadow 0.2s; margin-bottom: 10px; }
+      .card:hover{ box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+      .row{ display:flex; gap:10px; align-items:center; }
+      .col{ display:flex; flex-direction:column; gap:8px; }
+      .muted{ color: var(--muted); font-size:12px; }
+      button{ padding:8px 10px; border-radius:10px; border:1px solid var(--border); background: transparent; color: var(--text); cursor:pointer; transition: all 0.2s; }
+      button:hover{ border-color: var(--cyan); background: rgba(6, 182, 212, 0.1); transform: translateY(-1px); }
+      button:active{ transform: translateY(0); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .gauge{ width: 180px; height: 100px; }
+      .tags{ display:flex; flex-wrap: wrap; gap:6px; }
+      .tag{ font-size:11px; padding:4px 6px; border-radius:999px; border:1px solid var(--border); transition: transform 0.2s; }
+      .tag:hover{ transform: scale(1.05); }
+      .tag.pos{ border-color: rgba(22,163,74,.4); background: rgba(22,163,74,.1); }
+      .tag.neg{ border-color: rgba(220,38,38,.4); background: rgba(220,38,38,.1); }
+      pre{ background:#0b1020; color:#e2e8f0; padding:10px; border-radius:12px; border:1px solid var(--border); max-height:220px; overflow:auto; font-size:11px; }
+      .pill{ font-size:12px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); }
+      .pill.low{ color: var(--green); border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.1); }
+      .pill.med{ color: var(--yellow); border-color: rgba(234,179,8,.35); background: rgba(234,179,8,.1); }
+      .pill.high{ color: var(--red); border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.1); }
+      .toolbar{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+      .progress{ display:flex; align-items:center; gap:8px; }
+      .bar{ width:100%; height:8px; background:#111827; border-radius:999px; overflow:hidden; border:1px solid var(--border); }
+      .bar>div{ height: 100%; width:0%; background: var(--cyan); transition: width .2s ease; }
+      a{ color: var(--cyan); text-decoration: none; }
+      a:hover{ text-decoration: underline; }
+      .quick-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+      .quick-btn{ font-size:11px; padding:6px 10px; display:flex; align-items:center; gap:4px; }
+      
+      /* File Upload Area */
+      .upload-area {
+        border: 2px dashed var(--border);
+        border-radius: 12px;
+        padding: 32px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: rgba(6, 182, 212, 0.05);
+      }
+      .upload-area:hover {
+        border-color: var(--cyan);
+        background: rgba(6, 182, 212, 0.1);
+      }
+      .upload-area.dragover {
+        border-color: var(--cyan);
+        background: rgba(6, 182, 212, 0.15);
+      }
+      input[type="file"] {
+        display: none;
+      }
+      
+      /* Stats */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .stat-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .stat-label {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      /* Results Table */
+      .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .results-table th {
+        text-align: left;
+        padding: 8px;
+        background: var(--card);
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .results-table td {
+        padding: 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .results-table tr:hover {
+        background: rgba(6, 182, 212, 0.05);
+      }
+      .url-cell {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      /* Search Input */
+      input[type="text"], input[type="search"] {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        font-size: 13px;
+      }
+      input[type="text"]:focus, input[type="search"]:focus {
+        outline: none;
+        border-color: var(--cyan);
+      }
+      
+      /* Modal for API Key */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      }
+      .modal h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+      .modal p {
+        margin: 0 0 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .modal input {
+        width: 100%;
+        margin-bottom: 16px;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      
+      /* Collapsible */
+      .collapsible-header{ cursor:pointer; user-select:none; display:flex; justify-content:space-between; align-items:center; padding:8px 0; }
+      .collapsible-header:hover{ color: var(--cyan); }
+      .collapsible-content{ max-height:0; overflow:hidden; transition: max-height 0.3s ease; }
+      .collapsible-content.open{ max-height:500px; }
+      .chevron{ transition: transform 0.3s; }
+      .chevron.open{ transform: rotate(180deg); }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+      .analyzing{ animation: pulse 1.5s ease-in-out infinite; }
+    </style>
+  </head>
+  <body>
+    
+    <!-- Tab Navigation -->
+    <div class="tabs">
+      <div class="tab active" data-tab="single">Single URL</div>
+      <div class="tab" data-tab="batch">Batch Processing</div>
+      <div class="tab" data-tab="dashboard">Report Dashboard</div>
+    </div>
+    
+    <!-- Tab 1: Single URL Analysis -->
+    <div class="tab-content active" id="tab-single">
+      <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+        <h1>🧪 Scamometer</h1>
+      </div>
+
+      <div id="needKey" class="card" style="display:none">
+        <div class="muted">Add your Gemini API key in <a href="#" id="openOptions">Options</a> to enable analysis.</div>
+      </div>
+
+      <div id="kickoff" class="card" style="display:none">
+        <div class="row">
+          <div class="col" style="flex:1">
+            <div class="muted">Starting analysis…</div>
+            <div class="progress">
+              <div class="bar"><div id="kickbar"></div></div>
+              <div class="muted" id="kickpct">0%</div>
+            </div>
+          </div>
+          <button id="cancelKick" title="Close">Close</button>
+        </div>
+      </div>
+
+      <div id="content" class="col" style="display:none">
+        <div class="card row" style="justify-content:space-between">
+          <div class="row" style="gap:14px">
+            <svg class="gauge" viewBox="0 0 100 60" aria-label="Scamometer">
+              <defs>
+                <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#16a34a"/>
+                  <stop offset="55%" stop-color="#eab308"/>
+                  <stop offset="100%" stop-color="#dc2626"/>
+                </linearGradient>
+              </defs>
+              <path d="M10,50 A40,40 0 0,1 90,50" stroke="url(#g)" stroke-width="10" fill="none" stroke-linecap="round"/>
+              <circle id="needle" cx="50" cy="50" r="2" fill="#e2e8f0"/>
+              <line id="hand" x1="50" y1="50" x2="50" y2="15" stroke="#e2e8f0" stroke-width="2" stroke-linecap="round"/>
+              <text id="scoreText" x="50" y="57" text-anchor="middle" font-size="10" fill="#e2e8f0">0 / 100</text>
+            </svg>
+            <div class="col">
+              <div id="verdict" style="font-size:18px; font-weight:600">—</div>
+              <div id="riskpill" class="pill low">Low risk</div>
+              <div class="muted" id="reason">—</div>
+            </div>
+          </div>
+          <div class="col" style="align-items:flex-end">
+            <button id="reanalyze" title="Run again">Re-run</button>
+          </div>
+        </div>
+
+        <div class="row" style="gap:12px">
+          <div class="card" style="flex:1">
+            <div class="muted">Positives</div>
+            <div id="positives" class="tags"></div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="muted">Red Flags</div>
+            <div id="negatives" class="tags"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="collapsible-header" id="rawToggle">
+            <div class="muted">Technical Details</div>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="collapsible-content" id="rawContent">
+            <div class="muted" style="margin-top:8px;">Raw JSON sent to AI</div>
+            <pre id="raw"></pre>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="quick-actions">
+            <button class="quick-btn" id="openOptions2">⚙️ Options</button>
+            <button class="quick-btn" id="copyReportBtn">📋 Copy</button>
+            <button class="quick-btn" id="exportPdfBtn">📄 Export</button>
+          </div>
+          <div class="muted" id="timestamp">—</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Tab 2: Batch Processing -->
+    <div class="tab-content" id="tab-batch">
+      <div style="padding: 12px;">
+        <h1 style="margin-bottom: 16px;">📦 Batch Processing</h1>
+        
+        <div id="batchUpload">
+          <div class="upload-area" id="uploadArea">
+            <div style="font-size: 48px; margin-bottom: 12px;">📄</div>
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Drop CSV file here or click to browse</div>
+            <div class="muted">File should contain one URL per row in the first column</div>
+            <input type="file" id="csvFile" accept=".csv,text/csv">
+          </div>
+          
+          <div style="margin-top: 16px;">
+            <button id="startBatchBtn" disabled style="width: 100%; padding: 12px;">Start Batch Analysis</button>
+          </div>
+        </div>
+        
+        <div id="batchProgress" style="display: none;">
+          <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div style="font-weight: 600;">Processing URLs...</div>
+              <div id="batchStatus" class="muted">Initializing...</div>
+            </div>
+            <div class="progress">
+              <div class="bar"><div id="batchBar"></div></div>
+              <div class="muted" id="batchPercent">0%</div>
+            </div>
+            <div style="margin-top: 12px; text-align: center;">
+              <span class="muted" id="batchProgressText">Processing URL 0 of 0</span>
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+              <button id="pauseBatchBtn" style="flex: 1;">⏸️ Pause</button>
+              <button id="resumeBatchBtn" style="flex: 1; display: none;">▶️ Resume</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Tab 3: Report Dashboard -->
+    <div class="tab-content" id="tab-dashboard">
+      <div style="padding: 12px;">
+        <h1 style="margin-bottom: 16px;">📊 Report Dashboard</h1>
+        
+        <!-- Summary Statistics -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="dashTotal">0</div>
+            <div class="stat-label">Total URLs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--green);" id="dashSuccess">0</div>
+            <div class="stat-label">Success</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--red);" id="dashFailed">0</div>
+            <div class="stat-label">Failed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--cyan);" id="dashAvgScore">—</div>
+            <div class="stat-label">Avg Score</div>
+          </div>
+        </div>
+        
+        <!-- Search and Export -->
+        <div class="card">
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="search" id="dashSearch" placeholder="Search URLs...">
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="exportPdfDash" style="flex: 1;">📄 Export PDF</button>
+            <button id="exportJsonDash" style="flex: 1;">📥 Export JSON</button>
+          </div>
+        </div>
+        
+        <!-- Results Table -->
+        <div class="card" style="padding: 0; overflow-x: auto;">
+          <table class="results-table" id="resultsTable">
+            <thead>
+              <tr>
+                <th>URL</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr>
+                <td colspan="4" style="text-align: center; padding: 24px;">
+                  <div class="muted">No batch results yet. Start a batch analysis to see results here.</div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <!-- API Key Modal -->
+    <div class="modal-overlay" id="apiKeyModal">
+      <div class="modal">
+        <h2>⚠️ API Key Required</h2>
+        <p>The Gemini API key failed. Please enter a new API key to continue batch processing.</p>
+        <input type="text" id="newApiKey" placeholder="Enter your Gemini API key">
+        <div class="modal-actions">
+          <button id="cancelApiKey">Cancel</button>
+          <button id="saveApiKey">Save & Resume</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="popup-tabs.js"></script>
+  </body>
+</html>

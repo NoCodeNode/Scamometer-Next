@@ -19,19 +19,28 @@ function renderLists(whitelist, blacklist) {
   const whitelistEl = document.getElementById('whitelistItems');
   const blacklistEl = document.getElementById('blacklistItems');
   
-  whitelistEl.innerHTML = whitelist.map(domain => `
+  whitelistEl.innerHTML = whitelist.map((domain, index) => `
     <div class="list-item">
       <span class="list-item-text">${escapeHtml(domain)}</span>
-      <button onclick="removeFromWhitelist('${escapeHtml(domain)}')">Remove</button>
+      <button data-domain="${escapeHtml(domain)}" data-list="whitelist">Remove</button>
     </div>
   `).join('') || '<div class="muted" style="margin-top:8px;">No whitelisted sites</div>';
   
-  blacklistEl.innerHTML = blacklist.map(domain => `
+  blacklistEl.innerHTML = blacklist.map((domain, index) => `
     <div class="list-item">
       <span class="list-item-text">${escapeHtml(domain)}</span>
-      <button onclick="removeFromBlacklist('${escapeHtml(domain)}')">Remove</button>
+      <button data-domain="${escapeHtml(domain)}" data-list="blacklist">Remove</button>
     </div>
   `).join('') || '<div class="muted" style="margin-top:8px;">No blacklisted sites</div>';
+  
+  // Add event listeners to remove buttons
+  whitelistEl.querySelectorAll('button[data-list="whitelist"]').forEach(btn => {
+    btn.addEventListener('click', () => removeFromWhitelist(btn.dataset.domain));
+  });
+  
+  blacklistEl.querySelectorAll('button[data-list="blacklist"]').forEach(btn => {
+    btn.addEventListener('click', () => removeFromBlacklist(btn.dataset.domain));
+  });
 }
 
 function escapeHtml(str) {
@@ -123,12 +132,12 @@ document.getElementById('addWhitelist').addEventListener('click', async () => {
   load();
 });
 
-window.removeFromWhitelist = async function(domain) {
+async function removeFromWhitelist(domain) {
   const { whitelist = [] } = await chrome.storage.local.get({ whitelist: [] });
   const updated = whitelist.filter(d => d !== domain);
   await chrome.storage.local.set({ whitelist: updated });
   load();
-};
+}
 
 // Blacklist management
 document.getElementById('addBlacklist').addEventListener('click', async () => {
@@ -153,12 +162,12 @@ document.getElementById('addBlacklist').addEventListener('click', async () => {
   load();
 });
 
-window.removeFromBlacklist = async function(domain) {
+async function removeFromBlacklist(domain) {
   const { blacklist = [] } = await chrome.storage.local.get({ blacklist: [] });
   const updated = blacklist.filter(d => d !== domain);
   await chrome.storage.local.set({ blacklist: updated });
   load();
-};
+}
 
 // Clear cache
 document.getElementById('clearCache').addEventListener('click', async () => {
@@ -287,5 +296,159 @@ document.getElementById('blacklistInput').addEventListener('keypress', (e) => {
   }
 });
 
+// ============================================================================
+// WEBHOOK CONFIGURATION
+// ============================================================================
+
+async function loadWebhookConfig() {
+  const { webhookUrl, webhookEnabled, webhookAuth, allowedDomains = [] } = await chrome.storage.local.get({
+    webhookUrl: '',
+    webhookEnabled: false,
+    webhookAuth: '',
+    allowedDomains: []
+  });
+  
+  document.getElementById('webhookUrl').value = webhookUrl || '';
+  document.getElementById('webhookEnabled').checked = webhookEnabled || false;
+  document.getElementById('webhookAuth').value = webhookAuth || '';
+  
+  renderWebhookDomains(allowedDomains);
+}
+
+function renderWebhookDomains(domains) {
+  const container = document.getElementById('webhookDomains');
+  if (domains.length === 0) {
+    container.innerHTML = '<div class="muted" style="margin-top:8px;">No domains whitelisted</div>';
+    return;
+  }
+  
+  container.innerHTML = domains.map(domain => `
+    <div class="list-item">
+      <span class="list-item-text">${escapeHtml(domain)}</span>
+      <button onclick="removeWebhookDomain('${escapeHtml(domain)}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+window.removeWebhookDomain = async function(domain) {
+  const { allowedDomains = [] } = await chrome.storage.local.get({ allowedDomains: [] });
+  const filtered = allowedDomains.filter(d => d !== domain);
+  await chrome.storage.local.set({ allowedDomains: filtered });
+  renderWebhookDomains(filtered);
+  showWebhookMessage('Domain removed', false);
+};
+
+document.getElementById('saveWebhook').addEventListener('click', async () => {
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  const webhookEnabled = document.getElementById('webhookEnabled').checked;
+  const webhookAuth = document.getElementById('webhookAuth').value.trim();
+  
+  // Validate URL if enabled
+  if (webhookEnabled && webhookUrl) {
+    try {
+      new URL(webhookUrl);
+    } catch (e) {
+      showWebhookMessage('Invalid webhook URL', true);
+      return;
+    }
+  }
+  
+  await chrome.storage.local.set({ webhookUrl, webhookEnabled, webhookAuth });
+  showWebhookMessage('Webhook configuration saved', false);
+});
+
+document.getElementById('testWebhook').addEventListener('click', async () => {
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  const webhookAuth = document.getElementById('webhookAuth').value.trim();
+  
+  if (!webhookUrl) {
+    showWebhookMessage('Please enter a webhook URL', true);
+    return;
+  }
+  
+  try {
+    new URL(webhookUrl);
+  } catch (e) {
+    showWebhookMessage('Invalid webhook URL', true);
+    return;
+  }
+  
+  showWebhookMessage('Testing webhook...', false);
+  
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (webhookAuth) {
+      headers['Authorization'] = webhookAuth;
+    }
+    
+    const testPayload = {
+      test: true,
+      timestamp: Date.now(),
+      message: 'Scamometer webhook test'
+    };
+    
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(testPayload)
+    });
+    
+    if (response.ok) {
+      showWebhookMessage(`✓ Webhook test successful (HTTP ${response.status})`, false);
+    } else {
+      showWebhookMessage(`✗ Webhook test failed (HTTP ${response.status})`, true);
+    }
+  } catch (error) {
+    showWebhookMessage(`✗ Webhook test failed: ${error.message}`, true);
+  }
+});
+
+document.getElementById('addWebhookDomain').addEventListener('click', async () => {
+  const input = document.getElementById('newWebhookDomain');
+  const domain = input.value.trim();
+  
+  if (!domain) return;
+  
+  // Validate domain URL
+  try {
+    new URL(domain);
+  } catch (e) {
+    showWebhookMessage('Invalid domain URL format (e.g., https://example.com)', true);
+    return;
+  }
+  
+  const { allowedDomains = [] } = await chrome.storage.local.get({ allowedDomains: [] });
+  
+  if (allowedDomains.includes(domain)) {
+    showWebhookMessage('Domain already whitelisted', true);
+    return;
+  }
+  
+  allowedDomains.push(domain);
+  await chrome.storage.local.set({ allowedDomains });
+  renderWebhookDomains(allowedDomains);
+  input.value = '';
+  showWebhookMessage('Domain added', false);
+});
+
+document.getElementById('newWebhookDomain').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('addWebhookDomain').click();
+  }
+});
+
+function showWebhookMessage(message, isError) {
+  const container = document.getElementById('webhookStatus');
+  container.className = 'status-msg ' + (isError ? 'error' : 'success');
+  container.textContent = message;
+  container.style.display = 'block';
+  setTimeout(() => {
+    container.style.display = 'none';
+  }, 3000);
+}
+
+// Load webhook config on page load
 load();
+loadWebhookConfig();
 
