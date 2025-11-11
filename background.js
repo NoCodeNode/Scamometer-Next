@@ -537,6 +537,9 @@ async function processNextBatchUrl() {
     // Wait for page to load
     await waitForTabLoad(tab.id);
     
+    // Additional wait for content script to be ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     // Run analysis
     await runAnalysis(tab.id, nextUrl.url, { reason: 'batch' });
     
@@ -649,75 +652,81 @@ function waitForTabLoad(tabId) {
  * @returns {Promise<Object>} - Screenshot info
  */
 async function captureScreenshotWithOverlay(tabId, url) {
-  // Inject overlay with URL and timestamp
-  const timestamp = formatTimestamp(new Date());
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    func: (url, timestamp) => {
-      const overlay = document.createElement('div');
-      overlay.id = 'scamometer-screenshot-overlay';
-      overlay.style.position = 'fixed';
-      overlay.style.top = '0';
-      overlay.style.left = '0';
-      overlay.style.width = '100%';
-      overlay.style.background = 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)';
-      overlay.style.color = 'white';
-      overlay.style.padding = '12px 16px';
-      overlay.style.zIndex = '2147483647';
-      overlay.style.fontFamily = 'monospace';
-      overlay.style.fontSize = '13px';
-      overlay.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-      overlay.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${url}</div>
-          <div style="margin-left:16px; white-space:nowrap;">${timestamp}</div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-    },
-    args: [url, timestamp]
-  });
-  
-  // Wait for overlay to render
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  // Capture screenshot
-  const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
-  
-  // Remove overlay
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => {
-      const overlay = document.getElementById('scamometer-screenshot-overlay');
-      if (overlay) overlay.remove();
+  try {
+    // Inject overlay with URL and timestamp
+    const timestamp = formatTimestamp(new Date());
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (url, timestamp) => {
+        const overlay = document.createElement('div');
+        overlay.id = 'scamometer-screenshot-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.background = 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)';
+        overlay.style.color = 'white';
+        overlay.style.padding = '12px 16px';
+        overlay.style.zIndex = '2147483647';
+        overlay.style.fontFamily = 'monospace';
+        overlay.style.fontSize = '13px';
+        overlay.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        overlay.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${url}</div>
+            <div style="margin-left:16px; white-space:nowrap;">${timestamp}</div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      },
+      args: [url, timestamp]
+    });
+    
+    // Wait for overlay to render
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Capture screenshot
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+    
+    // Remove overlay
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const overlay = document.getElementById('scamometer-screenshot-overlay');
+        if (overlay) overlay.remove();
+      }
+    });
+    
+    // Calculate SHA-256 hash
+    const base64 = dataUrl.split(',')[1];
+    const binary = atob(base64);
+    const buffer = new ArrayBuffer(binary.length);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < binary.length; i++) {
+      view[i] = binary.charCodeAt(i);
     }
-  });
-  
-  // Calculate SHA-256 hash
-  const base64 = dataUrl.split(',')[1];
-  const binary = atob(base64);
-  const buffer = new ArrayBuffer(binary.length);
-  const view = new Uint8Array(buffer);
-  for (let i = 0; i < binary.length; i++) {
-    view[i] = binary.charCodeAt(i);
+    
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Download screenshot
+    await chrome.downloads.download({
+      url: dataUrl,
+      filename: `${hash}.png`,
+      saveAs: false
+    });
+    
+    return {
+      hash,
+      timestamp,
+      filename: `${hash}.png`
+    };
+  } catch (error) {
+    console.error('Screenshot capture failed:', error);
+    // Return null if screenshot fails, but don't fail the whole analysis
+    return null;
   }
-  
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  // Download screenshot
-  await chrome.downloads.download({
-    url: dataUrl,
-    filename: `${hash}.png`,
-    saveAs: false
-  });
-  
-  return {
-    hash,
-    timestamp,
-    filename: `${hash}.png`
-  };
 }
 
 /**
