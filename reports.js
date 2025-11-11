@@ -176,6 +176,101 @@ window.viewReport = function(index) {
   detailWindow.document.write(generateDetailedView(report));
 };
 
+window.downloadHtml = async function(index) {
+  const report = filteredReports[index];
+  if (!report) return;
+  
+  const html = generateDetailedView(report);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  
+  try {
+    const hostname = new URL(report.url).hostname.replace(/\./g, '_');
+    await chrome.downloads.download({
+      url: url,
+      filename: `scamometer_reports/report_${hostname}_${Date.now()}.html`,
+      saveAs: false
+    });
+    showToast('Report downloaded to scamometer_reports folder');
+  } catch (err) {
+    console.error('Download error:', err);
+    // Fallback
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report_${Date.now()}.html`;
+    a.click();
+    showToast('Report downloaded');
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+};
+
+window.downloadJson = function(index) {
+  const report = filteredReports[index];
+  if (!report) return;
+  
+  const json = JSON.stringify(report, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const hostname = new URL(report.url).hostname.replace(/\./g, '_');
+  a.download = `report_${hostname}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('JSON downloaded');
+};
+
+window.deleteReport = async function(index) {
+  const report = filteredReports[index];
+  if (!report) return;
+  
+  if (!confirm(`Delete report for ${report.url}?`)) return;
+  
+  // Delete from storage
+  if (report.type === 'batch') {
+    // Remove from batch queue
+    const data = await chrome.storage.local.get('batch::queue');
+    if (data['batch::queue']) {
+      const queue = data['batch::queue'];
+      if (queue.urls && queue.urls[report.index]) {
+        queue.urls.splice(report.index, 1);
+        await chrome.storage.local.set({ 'batch::queue': queue });
+      }
+    }
+  } else {
+    // Remove single analysis
+    await chrome.storage.local.remove(`analysis::${report.url}`);
+  }
+  
+  showToast('Report deleted');
+  await loadReports();
+  filterReports();
+};
+
+function showToast(message, isError = false) {
+  // Simple toast notification
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: ${isError ? '#dc2626' : '#16a34a'};
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 10000;
+    animation: slideIn 0.3s ease;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
 function generateDetailedView(report) {
   const score = report.result?.score || 0;
   const riskLevel = score < 30 ? 'low' : score < 70 ? 'medium' : 'high';

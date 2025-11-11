@@ -51,6 +51,11 @@ function setupEventListeners() {
   document.getElementById('exportJsonBtn').onclick = exportJsonReport;
   document.getElementById('newBatchBtn').onclick = newBatch;
   
+  // Close button
+  document.getElementById('closeBtn')?.addEventListener('click', () => {
+    window.close();
+  });
+  
   // API Key Modal
   document.getElementById('cancelApiKeyBtn').onclick = () => {
     document.getElementById('apiKeyModal').classList.remove('active');

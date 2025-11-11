@@ -138,7 +138,12 @@ function renderCompletedTasks() {
   
   empty.style.display = 'none';
   
-  container.innerHTML = completedTasks.map((task, index) => {
+  // Remove old event listeners by cloning
+  const newContainer = container.cloneNode(false);
+  container.parentNode.replaceChild(newContainer, container);
+  newContainer.id = 'completedTasks';
+  
+  newContainer.innerHTML = completedTasks.map((task, index) => {
     const completed = task.completed || 0;
     const failed = task.failed || 0;
     const total = task.total || 0;
@@ -169,12 +174,23 @@ function renderCompletedTasks() {
         </div>
         
         <div class="task-actions">
-          <button onclick="location.href='reports.html'">📊 View Reports</button>
-          <button class="danger" onclick="deleteCompleted(${index})">🗑️ Delete</button>
+          <button data-action="view-reports" data-index="${index}">📊 View Reports</button>
+          <button class="danger" data-action="delete" data-index="${index}">🗑️ Delete</button>
         </div>
       </div>
     `;
   }).join('');
+  
+  // Add event listeners
+  newContainer.querySelectorAll('[data-action]').forEach(btn => {
+    const action = btn.dataset.action;
+    const index = parseInt(btn.dataset.index);
+    if (action === 'view-reports') {
+      btn.addEventListener('click', () => location.href = 'reports.html');
+    } else if (action === 'delete') {
+      btn.addEventListener('click', () => deleteCompleted(index));
+    }
+  });
 }
 
 function escapeHtml(str) {
@@ -231,6 +247,26 @@ async function cancelTask() {
   
   await loadTasks();
   renderTasks();
+}
+
+function viewBatchPage() {
+  location.href = 'batch.html';
+}
+
+async function deleteCompleted(index) {
+  if (!confirm('Delete this completed task?')) return;
+  
+  completedTasks.splice(index, 1);
+  await chrome.storage.local.set({ completedBatches: completedTasks });
+  renderCompletedTasks();
+}
+
+async function clearCompleted() {
+  if (!confirm('Clear all completed tasks?')) return;
+  
+  completedTasks = [];
+  await chrome.storage.local.set({ completedBatches: [] });
+  renderCompletedTasks();
 }
 
 function viewBatchPage() {
