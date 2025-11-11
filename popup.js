@@ -27,7 +27,20 @@ function setupEventListeners() {
   document.getElementById('openOptions')?.addEventListener('click', () => chrome.runtime.openOptionsPage());
   document.getElementById('reanalyze')?.addEventListener('click', reanalyze);
   document.getElementById('copyReport')?.addEventListener('click', copyReport);
-  document.getElementById('batchBtn')?.addEventListener('click', openBatchPage);
+  
+  // Navigation buttons
+  document.getElementById('reportsBtn')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('reports.html') });
+  });
+  document.getElementById('batchBtn')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('batch.html') });
+  });
+  document.getElementById('tasksBtn')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('tasks.html') });
+  });
+  document.getElementById('analyticsBtn')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('analytics.html') });
+  });
   document.getElementById('optionsBtn')?.addEventListener('click', () => chrome.runtime.openOptionsPage());
 }
 
@@ -64,7 +77,9 @@ function showDisabledState() {
   document.getElementById('needKey').style.display = 'none';
   document.getElementById('loading').style.display = 'none';
   document.getElementById('results').style.display = 'none';
+  document.getElementById('navMenu').style.display = 'block';
   document.getElementById('disabledState').style.display = 'block';
+}
 }
 
 async function refresh() {
@@ -117,6 +132,7 @@ function displayResults(data) {
   document.getElementById('needKey').style.display = 'none';
   document.getElementById('loading').style.display = 'none';
   document.getElementById('results').style.display = 'flex';
+  document.getElementById('navMenu').style.display = 'block';
   document.getElementById('disabledState').style.display = 'none';
   
   currentAnalysisData = data;

@@ -19,19 +19,28 @@ function renderLists(whitelist, blacklist) {
   const whitelistEl = document.getElementById('whitelistItems');
   const blacklistEl = document.getElementById('blacklistItems');
   
-  whitelistEl.innerHTML = whitelist.map(domain => `
+  whitelistEl.innerHTML = whitelist.map((domain, index) => `
     <div class="list-item">
       <span class="list-item-text">${escapeHtml(domain)}</span>
-      <button onclick="removeFromWhitelist('${escapeHtml(domain)}')">Remove</button>
+      <button data-domain="${escapeHtml(domain)}" data-list="whitelist">Remove</button>
     </div>
   `).join('') || '<div class="muted" style="margin-top:8px;">No whitelisted sites</div>';
   
-  blacklistEl.innerHTML = blacklist.map(domain => `
+  blacklistEl.innerHTML = blacklist.map((domain, index) => `
     <div class="list-item">
       <span class="list-item-text">${escapeHtml(domain)}</span>
-      <button onclick="removeFromBlacklist('${escapeHtml(domain)}')">Remove</button>
+      <button data-domain="${escapeHtml(domain)}" data-list="blacklist">Remove</button>
     </div>
   `).join('') || '<div class="muted" style="margin-top:8px;">No blacklisted sites</div>';
+  
+  // Add event listeners to remove buttons
+  whitelistEl.querySelectorAll('button[data-list="whitelist"]').forEach(btn => {
+    btn.addEventListener('click', () => removeFromWhitelist(btn.dataset.domain));
+  });
+  
+  blacklistEl.querySelectorAll('button[data-list="blacklist"]').forEach(btn => {
+    btn.addEventListener('click', () => removeFromBlacklist(btn.dataset.domain));
+  });
 }
 
 function escapeHtml(str) {
@@ -123,12 +132,12 @@ document.getElementById('addWhitelist').addEventListener('click', async () => {
   load();
 });
 
-window.removeFromWhitelist = async function(domain) {
+async function removeFromWhitelist(domain) {
   const { whitelist = [] } = await chrome.storage.local.get({ whitelist: [] });
   const updated = whitelist.filter(d => d !== domain);
   await chrome.storage.local.set({ whitelist: updated });
   load();
-};
+}
 
 // Blacklist management
 document.getElementById('addBlacklist').addEventListener('click', async () => {
@@ -153,12 +162,12 @@ document.getElementById('addBlacklist').addEventListener('click', async () => {
   load();
 });
 
-window.removeFromBlacklist = async function(domain) {
+async function removeFromBlacklist(domain) {
   const { blacklist = [] } = await chrome.storage.local.get({ blacklist: [] });
   const updated = blacklist.filter(d => d !== domain);
   await chrome.storage.local.set({ blacklist: updated });
   load();
-};
+}
 
 // Clear cache
 document.getElementById('clearCache').addEventListener('click', async () => {
