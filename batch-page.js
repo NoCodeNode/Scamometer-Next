@@ -356,7 +356,7 @@ function generateInteractiveReport() {
   const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, m =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   
-  // Generate table rows
+  // Generate table rows with expandable details
   const tableRows = batchResults.map((result, index) => {
     const score = result.result?.ai?.scamometer || 0;
     const verdict = result.result?.ai?.verdict || (result.status === 'failed' ? 'Failed' : 'N/A');
@@ -371,10 +371,10 @@ function generateInteractiveReport() {
     const scoreColor = score >= 75 ? '#ef4444' : (score >= 40 ? '#f59e0b' : '#10b981');
     
     return `
-      <tr class="result-row ${scoreClass}">
+      <tr class="result-row ${scoreClass}" onclick="toggleDetails(${index})">
         <td class="url-cell">${escapeHtml(result.url)}</td>
         <td class="date-cell">${escapeHtml(dateFormatted)}</td>
-        <td class="screenshot-cell">
+        <td class="screenshot-cell" onclick="event.stopPropagation();">
           ${screenshotFile ? `
             <button class="view-btn" onclick="toggleScreenshot(${index})">👁️ View</button>
             <div id="screenshot-${index}" class="screenshot-modal" style="display:none;">
@@ -392,6 +392,28 @@ function generateInteractiveReport() {
         </td>
         <td class="indicators-cell">
           ${negatives.length > 0 ? `<span class="neg-count">✗ ${negatives.length}</span>` : '<span class="na">0</span>'}
+        </td>
+      </tr>
+      <tr id="details-${index}" class="details-row" style="display:none;">
+        <td colspan="8" class="details-cell">
+          <div class="details-content">
+            <div class="details-section">
+              <h4 style="color:#10b981; margin-bottom:12px;">✅ Positive Indicators (${positives.length})</h4>
+              ${positives.length > 0 ? `
+                <ul style="list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:8px;">
+                  ${positives.map(p => `<li style="padding:8px 12px; background:#d1fae5; color:#065f46; border-radius:6px; font-size:13px;">✓ ${escapeHtml(p)}</li>`).join('')}
+                </ul>
+              ` : '<p style="color:#9ca3af; font-style:italic;">No positive indicators found</p>'}
+            </div>
+            <div class="details-section" style="margin-top:20px;">
+              <h4 style="color:#ef4444; margin-bottom:12px;">🚩 Red Flags (${negatives.length})</h4>
+              ${negatives.length > 0 ? `
+                <ul style="list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:8px;">
+                  ${negatives.map(n => `<li style="padding:8px 12px; background:#fee2e2; color:#991b1b; border-radius:6px; font-size:13px;">✗ ${escapeHtml(n)}</li>`).join('')}
+                </ul>
+              ` : '<p style="color:#9ca3af; font-style:italic;">No red flags found</p>'}
+            </div>
+          </div>
         </td>
       </tr>
     `;
@@ -536,6 +558,31 @@ function generateInteractiveReport() {
     
     tbody tr:hover {
       background: #f8f9fa;
+    }
+    
+    tbody tr.result-row {
+      cursor: pointer;
+    }
+    
+    tbody tr.details-row {
+      cursor: default;
+    }
+    
+    .details-cell {
+      background: #f8f9fa !important;
+      padding: 24px !important;
+    }
+    
+    .details-content {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      border: 2px solid #e5e7eb;
+    }
+    
+    .details-section h4 {
+      font-size: 16px;
+      font-weight: 700;
     }
     
     td {
@@ -700,13 +747,16 @@ function generateInteractiveReport() {
     </div>
     
     <div class="export-bar">
-      <div>
-        <strong>Risk Distribution:</strong>
-        <span style="color:#10b981; margin-left:12px;">● Low: ${lowRisk}</span>
-        <span style="color:#f59e0b; margin-left:12px;">● Medium: ${mediumRisk}</span>
-        <span style="color:#ef4444; margin-left:12px;">● High: ${highRisk}</span>
+      <div style="flex:1;">
+        <input type="text" id="searchBox" placeholder="🔍 Search by URL..." style="padding:10px 16px; border:1px solid #d1d5db; border-radius:8px; width:100%; max-width:400px; font-size:14px;" onkeyup="filterTable()">
       </div>
-      <button class="export-btn" onclick="exportAsJSON()">📥 Export as JSON</button>
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <button class="filter-btn" data-filter="all" onclick="setFilter('all')" style="padding:8px 16px; border-radius:6px; border:2px solid #667eea; background:#667eea; color:white; cursor:pointer; font-weight:600;">All</button>
+        <button class="filter-btn" data-filter="low" onclick="setFilter('low')" style="padding:8px 16px; border-radius:6px; border:1px solid #10b981; background:white; color:#10b981; cursor:pointer; font-weight:600;">Low Risk</button>
+        <button class="filter-btn" data-filter="medium" onclick="setFilter('medium')" style="padding:8px 16px; border-radius:6px; border:1px solid #f59e0b; background:white; color:#f59e0b; cursor:pointer; font-weight:600;">Medium Risk</button>
+        <button class="filter-btn" data-filter="high" onclick="setFilter('high')" style="padding:8px 16px; border-radius:6px; border:1px solid #ef4444; background:white; color:#ef4444; cursor:pointer; font-weight:600;">High Risk</button>
+        <button class="export-btn" onclick="exportAsJSON()">📥 Export as JSON</button>
+      </div>
     </div>
     
     <div class="table-container">
@@ -740,15 +790,83 @@ function generateInteractiveReport() {
   </div>
   
   <script>
+    let currentFilter = 'all';
+    let allRows = [];
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      allRows = Array.from(document.querySelectorAll('tbody tr.result-row'));
+    });
+    
+    function toggleDetails(index) {
+      const detailsRow = document.getElementById('details-' + index);
+      if (detailsRow) {
+        if (detailsRow.style.display === 'none' || detailsRow.style.display === '') {
+          // Close all other details
+          document.querySelectorAll('.details-row').forEach(row => row.style.display = 'none');
+          detailsRow.style.display = 'table-row';
+        } else {
+          detailsRow.style.display = 'none';
+        }
+      }
+    }
+    
     function toggleScreenshot(index) {
       const modal = document.getElementById('screenshot-' + index);
-      if (modal.style.display === 'none') {
-        // Hide all other screenshots
-        document.querySelectorAll('.screenshot-modal').forEach(m => m.style.display = 'none');
-        modal.style.display = 'block';
-      } else {
-        modal.style.display = 'none';
+      if (modal) {
+        if (modal.style.display === 'none' || modal.style.display === '') {
+          // Hide all other screenshots
+          document.querySelectorAll('.screenshot-modal').forEach(m => m.style.display = 'none');
+          modal.style.display = 'block';
+        } else {
+          modal.style.display = 'none';
+        }
       }
+    }
+    
+    function setFilter(filter) {
+      currentFilter = filter;
+      
+      // Update button styles
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) {
+          btn.style.background = '#667eea';
+          btn.style.color = 'white';
+          btn.style.borderColor = '#667eea';
+        } else {
+          btn.style.background = 'white';
+          const color = btn.dataset.filter === 'low' ? '#10b981' : btn.dataset.filter === 'medium' ? '#f59e0b' : btn.dataset.filter === 'high' ? '#ef4444' : '#667eea';
+          btn.style.color = color;
+          btn.style.borderColor = color;
+        }
+      });
+      
+      filterTable();
+    }
+    
+    function filterTable() {
+      const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+      
+      allRows.forEach((row, idx) => {
+        const url = row.querySelector('.url-cell').textContent.toLowerCase();
+        const scoreClass = row.classList.contains('low') ? 'low' : row.classList.contains('medium') ? 'medium' : 'high';
+        
+        // Check search
+        const matchesSearch = !searchTerm || url.includes(searchTerm);
+        
+        // Check filter
+        const matchesFilter = currentFilter === 'all' || scoreClass === currentFilter;
+        
+        // Show or hide
+        if (matchesSearch && matchesFilter) {
+          row.style.display = 'table-row';
+        } else {
+          row.style.display = 'none';
+          // Also hide details row
+          const detailsRow = document.getElementById('details-' + idx);
+          if (detailsRow) detailsRow.style.display = 'none';
+        }
+      });
     }
     
     function exportAsJSON() {

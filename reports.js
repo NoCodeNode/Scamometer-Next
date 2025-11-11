@@ -8,7 +8,7 @@ let currentFilter = 'all';
 document.addEventListener('DOMContentLoaded', async () => {
   await loadReports();
   setupEventListeners();
-  renderReports();
+  filterReports(); // Apply initial filter
 });
 
 function setupEventListeners() {
