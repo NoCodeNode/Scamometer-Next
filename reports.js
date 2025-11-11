@@ -84,7 +84,7 @@ function updateStats() {
   let low = 0, medium = 0, high = 0;
   
   allReports.forEach(report => {
-    const score = report.result?.score || 0;
+    const score = report.result?.ai?.scamometer || 0;
     if (score < 30) low++;
     else if (score < 70) medium++;
     else high++;
@@ -95,6 +95,13 @@ function updateStats() {
   document.getElementById('mediumRiskCount').textContent = medium;
   document.getElementById('highRiskCount').textContent = high;
 }
+
+// Pagination variables
+let currentPage = 1;
+const itemsPerPage = 20;
+
+// Sorting variable
+let currentSort = 'date-desc';
 
 function filterReports() {
   const searchTerm = document.getElementById('searchBar').value.toLowerCase();
