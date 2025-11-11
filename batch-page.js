@@ -79,9 +79,7 @@ function handleFile(file) {
     }
     
     document.getElementById('fileInfo').style.display = 'block';
-    document.getElementById('fileInfo').innerHTML = `
-      ✅ Loaded <strong>${batchUrls.length}</strong> URLs from ${file.name}
-    `;
+    document.getElementById('fileInfo').textContent = `✅ Loaded ${batchUrls.length} URLs from ${file.name}`;
     document.getElementById('startBtn').disabled = false;
     showToast(`Loaded ${batchUrls.length} URLs successfully`);
   };
