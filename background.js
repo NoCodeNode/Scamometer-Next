@@ -748,8 +748,8 @@ async function captureScreenshotWithOverlay(tabId, url) {
     return {
       hash,
       timestamp,
-      filename: filename,
-      dataUrl: dataUrl // Include dataUrl for embedding in HTML report
+      filename: filename
+      // No dataUrl - HTML reports will use relative paths to the downloaded files
     };
   } catch (error) {
     console.error('Screenshot capture failed:', error);

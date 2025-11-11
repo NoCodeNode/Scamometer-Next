@@ -187,6 +187,15 @@ function generateDetailedView(report) {
         <img src="${report.screenshot.dataUrl}" style="max-width: 100%; border: 1px solid #1f2937; border-radius: 8px;">
       </div>
     `;
+  } else if (report.screenshot && report.screenshot.filename) {
+    screenshotHtml = `
+      <div style="margin-top: 24px;">
+        <h2 style="color: #06b6d4; margin-bottom: 12px;">📸 Screenshot</h2>
+        <img src="./${report.screenshot.filename}" style="max-width: 100%; border: 1px solid #1f2937; border-radius: 8px;"
+             onerror="this.parentElement.innerHTML='<p style=\\'padding:20px;text-align:center;color:#999;\\'>Screenshot not found.</p>'">
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 8px;">Note: Screenshot uses relative path. Make sure this window was opened from the reports dashboard.</p>
+      </div>
+    `;
   }
   
   return `
@@ -279,13 +288,26 @@ window.downloadHtml = async function(index) {
   const html = await generateDownloadableHtml(report);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
   
   const hostname = new URL(report.url).hostname.replace(/[^a-z0-9]/gi, '_');
-  a.download = `scamometer_${hostname}_${Date.now()}.html`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const filename = `scamometer_${hostname}_${Date.now()}.html`;
+  
+  // Try to download to scamometer_reports folder using chrome.downloads API
+  try {
+    await chrome.downloads.download({
+      url: url,
+      filename: `scamometer_reports/${filename}`,
+      saveAs: false
+    });
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    // Fallback to regular download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 };
 
 async function generateDownloadableHtml(report) {
@@ -467,6 +489,10 @@ async function generateDownloadableHtml(report) {
   </style>
 </head>
 <body>
+  <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 12px 20px; text-align: center; font-size: 13px; font-weight: 500; margin-bottom: 20px;">
+    💡 <strong>Note:</strong> This report is automatically saved to <strong>Downloads/scamometer_reports/</strong> with screenshots. Open it from that folder to view images.
+  </div>
+  
   <div class="container">
     <header>
       <h1>${escapeHtml(report.url)}</h1>

@@ -353,10 +353,10 @@ function generateInteractiveReport() {
   const mediumRisk = completed.filter(r => r.result.ai?.scamometer >= 40 && r.result.ai?.scamometer < 75).length;
   const lowRisk = completed.filter(r => r.result.ai?.scamometer < 40).length;
   
-  // Embed screenshots as base64 data URLs in the HTML
+  // Use relative paths for screenshots (they're in the same folder)
   const resultsWithScreenshots = batchResults.map(r => ({
     ...r,
-    screenshotData: r.screenshot?.dataUrl || null
+    screenshotFilename: r.screenshot?.filename || null
   }));
   
   return `<!DOCTYPE html>
@@ -741,6 +741,12 @@ function generateInteractiveReport() {
   </style>
 </head>
 <body>
+  <!-- Info Banner -->
+  <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px; text-align: center; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    📁 This HTML report is saved in <strong>Downloads/scamometer_reports/</strong> folder alongside the screenshots. 
+    Screenshots use relative paths and will display when the HTML is opened from that location.
+  </div>
+  
   <div class="container">
     <div class="header">
       <div class="header-content">
@@ -750,7 +756,7 @@ function generateInteractiveReport() {
     </div>
     
     <div class="export-bar">
-      <div style="font-weight: 600; color: #374151;">Interactive Report • Click cards to view screenshots</div>
+      <div style="font-weight: 600; color: #374151;">Interactive Report • Click "View Screenshot" to see captured images</div>
       <button class="export-btn" onclick="exportToJSON()">📥 Export as JSON</button>
     </div>
     
@@ -824,7 +830,7 @@ function generateInteractiveReport() {
                     ${result.error ? `<strong>Error:</strong> ${escapeHtml(result.error)}` : ''}
                   </div>
                 `}
-                ${result.screenshotData ? `
+                ${result.screenshotFilename ? `
                   <button class="view-screenshot-btn" onclick="toggleScreenshot(${index})">
                     👁️ View Screenshot
                   </button>
@@ -832,9 +838,10 @@ function generateInteractiveReport() {
               </div>
               <div class="result-score ${scoreClass}">${Math.round(score)}<span style="font-size: 24px;">/100</span></div>
             </div>
-            ${result.screenshotData ? `
+            ${result.screenshotFilename ? `
               <div class="screenshot-preview" id="screenshot-${index}">
-                <img src="${result.screenshotData}" alt="Screenshot of ${escapeHtml(result.url)}">
+                <img src="./${result.screenshotFilename}" alt="Screenshot of ${escapeHtml(result.url)}" 
+                     onerror="this.parentElement.innerHTML='<p style=\\"padding:20px;text-align:center;color:#999;\\">Screenshot not found. Make sure this HTML file is in the Downloads/scamometer_reports/ folder with the screenshots.</p>'">
               </div>
             ` : ''}
           </div>
