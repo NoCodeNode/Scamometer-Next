@@ -33,6 +33,14 @@ function storageKey(url) {
 // Listen for page loads to auto-run analysis
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
+  
+  // Check if extension is enabled
+  const { enabled = true } = await chrome.storage.local.get({ enabled: true });
+  if (!enabled) {
+    await setBadge({ text: '', color: '#6b7280' });
+    return;
+  }
+  
   try {
     await runAnalysis(tabId, tab.url, { reason: 'tab_complete' });
   } catch (e) {
@@ -653,6 +661,10 @@ function waitForTabLoad(tabId) {
  */
 async function captureScreenshotWithOverlay(tabId, url) {
   try {
+    // Make sure tab is visible for screenshot
+    await chrome.tabs.update(tabId, { active: true });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     // Inject overlay with URL and timestamp
     const timestamp = formatTimestamp(new Date());
     await chrome.scripting.executeScript({
@@ -683,10 +695,14 @@ async function captureScreenshotWithOverlay(tabId, url) {
     });
     
     // Wait for overlay to render
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Get the tab's window to ensure it's focused
+    const tab = await chrome.tabs.get(tabId);
+    await chrome.windows.update(tab.windowId, { focused: true });
     
     // Capture screenshot
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
     
     // Remove overlay
     await chrome.scripting.executeScript({
@@ -695,7 +711,7 @@ async function captureScreenshotWithOverlay(tabId, url) {
         const overlay = document.getElementById('scamometer-screenshot-overlay');
         if (overlay) overlay.remove();
       }
-    });
+    }).catch(() => {}); // Ignore errors if tab is closed
     
     // Calculate SHA-256 hash
     const base64 = dataUrl.split(',')[1];
@@ -713,14 +729,14 @@ async function captureScreenshotWithOverlay(tabId, url) {
     // Download screenshot
     await chrome.downloads.download({
       url: dataUrl,
-      filename: `${hash}.png`,
+      filename: `scamometer-${hash}.png`,
       saveAs: false
     });
     
     return {
       hash,
       timestamp,
-      filename: `${hash}.png`
+      filename: `scamometer-${hash}.png`
     };
   } catch (error) {
     console.error('Screenshot capture failed:', error);

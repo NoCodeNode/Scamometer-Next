@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Scamometer - Batch Processing</title>
+  <style>
+    :root {
+      --bg:#0b1020; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+      --green:#16a34a; --yellow:#eab308; --red:#dc2626; --cyan:#06b6d4; --border:#1f2937;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--border);
+    }
+    
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo {
+      font-size: 40px;
+    }
+    
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    
+    .card h2 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      color: var(--cyan);
+    }
+    
+    .upload-zone {
+      border: 3px dashed var(--border);
+      border-radius: 16px;
+      padding: 64px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: rgba(6, 182, 212, 0.05);
+    }
+    
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--cyan);
+      background: rgba(6, 182, 212, 0.15);
+      transform: scale(1.02);
+    }
+    
+    .upload-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    
+    .upload-text {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .upload-hint {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    
+    input[type="file"] {
+      display: none;
+    }
+    
+    button {
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    button:hover:not(:disabled) {
+      border-color: var(--cyan);
+      background: rgba(6, 182, 212, 0.1);
+      transform: translateY(-2px);
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    button.primary {
+      background: var(--cyan);
+      border-color: var(--cyan);
+      color: var(--bg);
+    }
+    
+    button.primary:hover:not(:disabled) {
+      background: #0891b2;
+    }
+    
+    .progress-section {
+      display: none;
+    }
+    
+    .progress-section.active {
+      display: block;
+    }
+    
+    .progress-bar-container {
+      width: 100%;
+      height: 12px;
+      background: #111827;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin: 16px 0;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), #0891b2);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+    }
+    
+    .progress-text {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .progress-stats {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .stat-card {
+      background: var(--bg);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
+    .stat-value.success { color: var(--green); }
+    .stat-value.failed { color: var(--red); }
+    .stat-value.avg { color: var(--cyan); }
+    
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    
+    .results-table th {
+      text-align: left;
+      padding: 12px;
+      background: var(--bg);
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
+      font-size: 13px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    
+    .results-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    
+    .results-table tr:hover {
+      background: rgba(6, 182, 212, 0.05);
+    }
+    
+    .score-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    
+    .score-badge.low {
+      background: rgba(22, 163, 74, 0.2);
+      color: var(--green);
+      border: 1px solid var(--green);
+    }
+    
+    .score-badge.medium {
+      background: rgba(234, 179, 8, 0.2);
+      color: var(--yellow);
+      border: 1px solid var(--yellow);
+    }
+    
+    .score-badge.high {
+      background: rgba(220, 38, 38, 0.2);
+      color: var(--red);
+      border: 1px solid var(--red);
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-badge.completed { background: rgba(22, 163, 74, 0.2); color: var(--green); }
+    .status-badge.failed { background: rgba(220, 38, 38, 0.2); color: var(--red); }
+    .status-badge.processing { background: rgba(6, 182, 212, 0.2); color: var(--cyan); }
+    
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    
+    .export-section {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 64px 32px;
+      color: var(--muted);
+    }
+    
+    .empty-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+    
+    .api-key-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .api-key-modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    
+    .modal-content h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: var(--red);
+    }
+    
+    .modal-content p {
+      margin-bottom: 24px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    
+    .modal-content input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    
+    .modal-content input:focus {
+      outline: none;
+      border-color: var(--cyan);
+    }
+    
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span class="logo">🧪</span> Scamometer Batch Processing</h1>
+      <button onclick="window.close()">✕ Close</button>
+    </header>
+    
+    <!-- Upload Section -->
+    <div class="card" id="uploadSection">
+      <h2>📦 Upload CSV File</h2>
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">Drop CSV file here or click to browse</div>
+        <div class="upload-hint">File should contain one URL per row in the first column</div>
+        <input type="file" id="csvFile" accept=".csv,text/csv">
+      </div>
+      <div class="controls">
+        <button class="primary" id="startBtn" disabled>🚀 Start Batch Analysis</button>
+        <button id="clearBtn">🗑️ Clear</button>
+      </div>
+      <div id="fileInfo" style="margin-top: 16px; color: var(--muted); display: none;"></div>
+    </div>
+    
+    <!-- Progress Section -->
+    <div class="card progress-section" id="progressSection">
+      <h2>⚡ Processing URLs...</h2>
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="progress-info">
+        <div class="progress-text" id="progressText">Initializing...</div>
+        <div class="progress-stats" id="progressStats">0 / 0</div>
+      </div>
+      <div class="controls">
+        <button id="pauseBtn">⏸️ Pause</button>
+        <button id="resumeBtn" style="display: none;">▶️ Resume</button>
+        <button id="stopBtn">⏹️ Stop</button>
+      </div>
+    </div>
+    
+    <!-- Results Dashboard -->
+    <div class="card" id="resultsSection" style="display: none;">
+      <h2>📊 Analysis Results</h2>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalCount">0</div>
+          <div class="stat-label">Total URLs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value success" id="successCount">0</div>
+          <div class="stat-label">Successful</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value failed" id="failedCount">0</div>
+          <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value avg" id="avgScore">—</div>
+          <div class="stat-label">Avg Risk Score</div>
+        </div>
+      </div>
+      
+      <div class="export-section">
+        <button class="primary" id="exportHtmlBtn">📊 Download Interactive HTML Report</button>
+        <button id="exportJsonBtn">📥 Download JSON Report</button>
+        <button id="newBatchBtn">🔄 New Batch</button>
+      </div>
+      
+      <div style="overflow-x: auto;">
+        <table class="results-table" id="resultsTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>URL</th>
+              <th>Risk Score</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+          </tbody>
+        </table>
+      </div>
+      
+      <div id="emptyResults" class="empty-state" style="display: none;">
+        <div class="empty-icon">📭</div>
+        <div>No results to display</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- API Key Error Modal -->
+  <div class="api-key-modal" id="apiKeyModal">
+    <div class="modal-content">
+      <h3>⚠️ API Key Error</h3>
+      <p>The Gemini API key has failed or expired. Please enter a new API key to continue batch processing. The batch will resume from where it stopped.</p>
+      <input type="text" id="newApiKey" placeholder="Enter your Gemini API key">
+      <div class="modal-actions">
+        <button id="cancelApiKeyBtn">Cancel</button>
+        <button class="primary" id="saveApiKeyBtn">💾 Save & Resume</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="batch-page.js"></script>
+</body>
+</html>
