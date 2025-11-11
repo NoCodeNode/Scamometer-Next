@@ -94,6 +94,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, error: e.message });
       }
     }
+    if (msg?.type === 'STOP_BATCH') {
+      try {
+        await stopBatchProcessing();
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }
     if (msg?.type === 'CAPTURE_SCREENSHOT') {
       try {
         const screenshot = await captureScreenshotWithOverlay(msg.tabId, msg.url);
@@ -657,6 +665,19 @@ async function resumeBatchProcessing() {
     await chrome.storage.local.set({ 'batch::queue': queue });
     batchProcessingActive = true;
     processNextBatchUrl();
+  }
+}
+
+async function stopBatchProcessing() {
+  batchProcessingActive = false;
+  const data = await chrome.storage.local.get('batch::queue');
+  const queue = data['batch::queue'];
+  if (queue) {
+    queue.status = 'completed';
+    await chrome.storage.local.set({ 'batch::queue': queue });
+    const completed = queue.urls.filter(u => u.status === 'completed').length;
+    const failed = queue.urls.filter(u => u.status === 'failed').length;
+    await updateBatchStatus('completed', completed + failed, queue.urls.length);
   }
 }
 
