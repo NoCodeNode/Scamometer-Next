@@ -306,10 +306,23 @@ function exportHtmlReport() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `scamometer-batch-report-${Date.now()}.html`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Interactive HTML report downloaded');
+  // Save to same folder as screenshots
+  a.download = `scamometer_reports/report_${Date.now()}.html`;
+  
+  // Use chrome.downloads API for proper folder placement
+  chrome.downloads.download({
+    url: url,
+    filename: `scamometer_reports/scamometer_report_${Date.now()}.html`,
+    saveAs: false
+  }).then(() => {
+    showToast('✅ Interactive HTML report downloaded to scamometer_reports folder!');
+    URL.revokeObjectURL(url);
+  }).catch(err => {
+    // Fallback to regular download
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Interactive HTML report downloaded');
+  });
 }
 
 function exportJsonReport() {
@@ -342,228 +355,567 @@ function generateInteractiveReport() {
   const mediumRisk = completed.filter(r => r.result.ai?.scamometer >= 40 && r.result.ai?.scamometer < 75).length;
   const lowRisk = completed.filter(r => r.result.ai?.scamometer < 40).length;
   
+  // Embed screenshots as base64 data URLs in the HTML
+  const resultsWithScreenshots = batchResults.map(r => ({
+    ...r,
+    screenshotData: r.screenshot?.dataUrl || null
+  }));
+  
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Scamometer Batch Analysis Report</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scamometer Batch Analysis Report - ${new Date().toLocaleDateString()}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 24px;
       min-height: 100vh;
+      padding: 40px 20px;
     }
+    
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       background: white;
       border-radius: 24px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       overflow: hidden;
+      animation: slideIn 0.5s ease;
     }
+    
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 40px;
+      padding: 60px 40px;
       text-align: center;
+      position: relative;
+      overflow: hidden;
     }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      animation: rotate 20s linear infinite;
+    }
+    
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    .header-content {
+      position: relative;
+      z-index: 1;
+    }
+    
     .header h1 {
-      font-size: 36px;
-      margin-bottom: 8px;
+      font-size: 48px;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.2);
     }
+    
     .header p {
-      opacity: 0.9;
-      font-size: 16px;
+      opacity: 0.95;
+      font-size: 18px;
+      font-weight: 500;
     }
-    .stats {
+    
+    .export-bar {
+      background: #f8f9fa;
+      padding: 20px 40px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    
+    .export-btn {
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .export-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    }
+    
+    .stats-container {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
       padding: 40px;
       background: #f8f9fa;
     }
+    
     .stat-card {
       background: white;
-      padding: 24px;
-      border-radius: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 32px;
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
       text-align: center;
+      transition: all 0.3s;
+      animation: fadeInUp 0.5s ease forwards;
+      opacity: 0;
     }
+    
+    @keyframes fadeInUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .stat-card:nth-child(1) { animation-delay: 0.1s; }
+    .stat-card:nth-child(2) { animation-delay: 0.2s; }
+    .stat-card:nth-child(3) { animation-delay: 0.3s; }
+    .stat-card:nth-child(4) { animation-delay: 0.4s; }
+    
+    .stat-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+    }
+    
     .stat-value {
-      font-size: 48px;
-      font-weight: 700;
-      margin-bottom: 8px;
+      font-size: 56px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--color-start), var(--color-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    .stat-value.total { color: #667eea; }
-    .stat-value.success { color: #10b981; }
-    .stat-value.failed { color: #ef4444; }
-    .stat-value.avg { color: #f59e0b; }
+    
+    .stat-card:nth-child(1) { --color-start: #667eea; --color-end: #764ba2; }
+    .stat-card:nth-child(2) { --color-start: #10b981; --color-end: #059669; }
+    .stat-card:nth-child(3) { --color-start: #ef4444; --color-end: #dc2626; }
+    .stat-card:nth-child(4) { --color-start: #f59e0b; --color-end: #d97706; }
+    
     .stat-label {
       color: #6b7280;
       font-size: 14px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
+      font-weight: 600;
     }
-    .chart-container {
+    
+    .chart-section {
       padding: 40px;
+      background: white;
     }
-    .chart-title {
-      font-size: 24px;
+    
+    .section-title {
+      font-size: 32px;
       font-weight: 700;
-      margin-bottom: 24px;
+      margin-bottom: 32px;
       color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
+    
     .bar-chart {
       display: flex;
       align-items: flex-end;
       justify-content: space-around;
-      height: 300px;
+      height: 350px;
       background: #f8f9fa;
-      border-radius: 16px;
-      padding: 24px;
+      border-radius: 20px;
+      padding: 32px;
+      gap: 24px;
     }
-    .bar {
+    
+    .bar-wrapper {
       flex: 1;
-      max-width: 150px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
     }
-    .bar-fill {
-      width: 100%;
-      background: linear-gradient(180deg, var(--color), var(--color-dark));
-      border-radius: 8px 8px 0 0;
-      position: relative;
-      transition: height 0.3s ease;
-    }
-    .bar-label {
-      font-weight: 600;
-      color: #6b7280;
-      font-size: 14px;
-    }
+    
     .bar-value {
-      font-size: 24px;
+      font-size: 32px;
       font-weight: 700;
+      color: var(--bar-color);
     }
+    
+    .bar-column {
+      width: 100%;
+      max-width: 150px;
+      background: linear-gradient(180deg, var(--bar-color), var(--bar-color-dark));
+      border-radius: 12px 12px 0 0;
+      position: relative;
+      transition: height 1s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+    }
+    
+    .bar-wrapper:nth-child(1) { --bar-color: #10b981; --bar-color-dark: #059669; }
+    .bar-wrapper:nth-child(2) { --bar-color: #f59e0b; --bar-color-dark: #d97706; }
+    .bar-wrapper:nth-child(3) { --bar-color: #ef4444; --bar-color-dark: #dc2626; }
+    
+    .bar-label {
+      font-weight: 700;
+      color: #6b7280;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
     .results-section {
       padding: 40px;
+      background: white;
     }
+    
     .result-card {
       background: #f8f9fa;
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 16px;
-      border-left: 4px solid var(--border-color);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 24px;
+      border-left: 6px solid var(--border-color);
+      transition: all 0.3s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
     }
+    
+    .result-card:hover {
+      transform: translateX(8px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
+    
     .result-card.low { --border-color: #10b981; }
     .result-card.medium { --border-color: #f59e0b; }
     .result-card.high { --border-color: #ef4444; }
+    
     .result-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      gap: 20px;
     }
+    
+    .result-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
     .result-url {
-      font-weight: 600;
-      color: #1f2937;
-      font-size: 16px;
-    }
-    .result-score {
-      font-size: 24px;
       font-weight: 700;
+      color: #1f2937;
+      font-size: 18px;
+      margin-bottom: 8px;
+      word-break: break-all;
     }
+    
+    .result-score {
+      font-size: 48px;
+      font-weight: 800;
+      text-align: center;
+      min-width: 120px;
+    }
+    
     .result-score.low { color: #10b981; }
     .result-score.medium { color: #f59e0b; }
     .result-score.high { color: #ef4444; }
+    
     .result-details {
       color: #6b7280;
-      line-height: 1.6;
+      line-height: 1.8;
+      font-size: 15px;
     }
+    
+    .result-details strong {
+      color: #374151;
+      font-weight: 600;
+    }
+    
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    
+    .tag {
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    
+    .tag.positive {
+      background: rgba(16, 185, 129, 0.15);
+      color: #059669;
+      border: 1.5px solid #10b981;
+    }
+    
+    .tag.negative {
+      background: rgba(239, 68, 68, 0.15);
+      color: #dc2626;
+      border: 1.5px solid #ef4444;
+    }
+    
+    .screenshot-preview {
+      margin-top: 20px;
+      display: none;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    
+    .screenshot-preview.active {
+      display: block;
+    }
+    
+    .screenshot-preview img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    
+    .view-screenshot-btn {
+      display: inline-block;
+      padding: 10px 20px;
+      margin-top: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      border: none;
+      font-size: 14px;
+    }
+    
+    .view-screenshot-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
     .footer {
       background: #1f2937;
       color: white;
-      padding: 24px;
+      padding: 40px;
       text-align: center;
+    }
+    
+    .footer h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+    
+    .footer p {
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+    
+    @media print {
+      body { background: white; padding: 0; }
+      .export-bar { display: none; }
+      .screenshot-preview { display: none !important; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🧪 Scamometer Batch Analysis Report</h1>
-      <p>Generated on ${new Date().toLocaleString()}</p>
+      <div class="header-content">
+        <h1>🧪 Scamometer Batch Analysis Report</h1>
+        <p>Generated on ${new Date().toLocaleString()} • ${batchResults.length} URLs Analyzed</p>
+      </div>
     </div>
     
-    <div class="stats">
+    <div class="export-bar">
+      <div style="font-weight: 600; color: #374151;">Interactive Report • Click cards to view screenshots</div>
+      <button class="export-btn" onclick="exportToJSON()">📥 Export as JSON</button>
+    </div>
+    
+    <div class="stats-container">
       <div class="stat-card">
-        <div class="stat-value total">${batchResults.length}</div>
+        <div class="stat-value">${batchResults.length}</div>
         <div class="stat-label">Total URLs</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value success">${completed.length}</div>
+        <div class="stat-value">${completed.length}</div>
         <div class="stat-label">Successful</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value failed">${failed.length}</div>
+        <div class="stat-value">${failed.length}</div>
         <div class="stat-label">Failed</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value avg">${avgScore}</div>
+        <div class="stat-value">${avgScore}</div>
         <div class="stat-label">Avg Risk Score</div>
       </div>
     </div>
     
-    <div class="chart-container">
-      <div class="chart-title">Risk Distribution</div>
+    <div class="chart-section">
+      <div class="section-title">📊 Risk Distribution</div>
       <div class="bar-chart">
-        <div class="bar">
-          <div class="bar-value" style="color: #10b981;">${lowRisk}</div>
-          <div class="bar-fill" style="--color: #10b981; --color-dark: #059669; height: ${lowRisk > 0 ? (lowRisk / Math.max(lowRisk, mediumRisk, highRisk) * 100) : 0}%;"></div>
+        <div class="bar-wrapper">
+          <div class="bar-value">${lowRisk}</div>
+          <div class="bar-column" style="height: ${lowRisk > 0 ? (lowRisk / Math.max(lowRisk, mediumRisk, highRisk, 1) * 100) : 0}%;"></div>
           <div class="bar-label">Low Risk</div>
         </div>
-        <div class="bar">
-          <div class="bar-value" style="color: #f59e0b;">${mediumRisk}</div>
-          <div class="bar-fill" style="--color: #f59e0b; --color-dark: #d97706; height: ${mediumRisk > 0 ? (mediumRisk / Math.max(lowRisk, mediumRisk, highRisk) * 100) : 0}%;"></div>
+        <div class="bar-wrapper">
+          <div class="bar-value">${mediumRisk}</div>
+          <div class="bar-column" style="height: ${mediumRisk > 0 ? (mediumRisk / Math.max(lowRisk, mediumRisk, highRisk, 1) * 100) : 0}%;"></div>
           <div class="bar-label">Medium Risk</div>
         </div>
-        <div class="bar">
-          <div class="bar-value" style="color: #ef4444;">${highRisk}</div>
-          <div class="bar-fill" style="--color: #ef4444; --color-dark: #dc2626; height: ${highRisk > 0 ? (highRisk / Math.max(lowRisk, mediumRisk, highRisk) * 100) : 0}%;"></div>
+        <div class="bar-wrapper">
+          <div class="bar-value">${highRisk}</div>
+          <div class="bar-column" style="height: ${highRisk > 0 ? (highRisk / Math.max(lowRisk, mediumRisk, highRisk, 1) * 100) : 0}%;"></div>
           <div class="bar-label">High Risk</div>
         </div>
       </div>
     </div>
     
     <div class="results-section">
-      <div class="chart-title">Detailed Results</div>
-      ${batchResults.map(result => {
+      <div class="section-title">📋 Detailed Analysis Results</div>
+      ${resultsWithScreenshots.map((result, index) => {
         const score = result.result?.ai?.scamometer || 0;
         const scoreClass = score >= 75 ? 'high' : (score >= 40 ? 'medium' : 'low');
+        const positives = result.result?.ai?.positives || [];
+        const negatives = result.result?.ai?.negatives || [];
+        
         return `
-          <div class="result-card ${scoreClass}">
+          <div class="result-card ${scoreClass}" id="result-${index}">
             <div class="result-header">
-              <div class="result-url">${escapeHtml(result.url)}</div>
-              <div class="result-score ${scoreClass}">${Math.round(score)}/100</div>
+              <div class="result-info">
+                <div class="result-url">${escapeHtml(result.url)}</div>
+                ${result.status === 'completed' ? `
+                  <div class="result-details">
+                    <strong>Verdict:</strong> ${escapeHtml(result.result?.ai?.verdict || 'N/A')}<br>
+                    <strong>Analysis:</strong> ${escapeHtml(result.result?.ai?.reason || 'N/A')}
+                  </div>
+                  ${positives.length > 0 || negatives.length > 0 ? `
+                    <div class="tags-container">
+                      ${positives.map(p => `<span class="tag positive">✓ ${escapeHtml(p)}</span>`).join('')}
+                      ${negatives.map(n => `<span class="tag negative">✗ ${escapeHtml(n)}</span>`).join('')}
+                    </div>
+                  ` : ''}
+                ` : `
+                  <div class="result-details">
+                    <strong>Status:</strong> ${escapeHtml(result.status)}<br>
+                    ${result.error ? `<strong>Error:</strong> ${escapeHtml(result.error)}` : ''}
+                  </div>
+                `}
+                ${result.screenshotData ? `
+                  <button class="view-screenshot-btn" onclick="toggleScreenshot(${index})">
+                    👁️ View Screenshot
+                  </button>
+                ` : ''}
+              </div>
+              <div class="result-score ${scoreClass}">${Math.round(score)}<span style="font-size: 24px;">/100</span></div>
             </div>
-            <div class="result-details">
-              <strong>Verdict:</strong> ${escapeHtml(result.result?.ai?.verdict || 'N/A')}<br>
-              <strong>Reason:</strong> ${escapeHtml(result.result?.ai?.reason || 'N/A')}<br>
-              ${result.status === 'failed' ? `<strong>Error:</strong> ${escapeHtml(result.error || 'Unknown error')}` : ''}
-            </div>
+            ${result.screenshotData ? `
+              <div class="screenshot-preview" id="screenshot-${index}">
+                <img src="${result.screenshotData}" alt="Screenshot of ${escapeHtml(result.url)}">
+              </div>
+            ` : ''}
           </div>
         `;
       }).join('')}
     </div>
     
     <div class="footer">
-      <p>Generated by Scamometer - AI Phishing & Scam Detector</p>
+      <h3>🧪 Scamometer</h3>
+      <p>AI-Powered Phishing & Scam Detector</p>
       <p>https://github.com/NoCodeNode/Scamometer-Next</p>
+      <p style="margin-top: 20px; font-size: 14px;">Built by Arnab Mandal • hello@arnabmandal.com</p>
     </div>
   </div>
+  
+  <script>
+    // Store data for JSON export
+    const reportData = ${JSON.stringify({
+      generated: new Date().toISOString(),
+      total: batchResults.length,
+      completed: completed.length,
+      failed: failed.length,
+      avgScore: avgScore,
+      results: batchResults.map(r => ({
+        url: r.url,
+        status: r.status,
+        score: r.result?.ai?.scamometer || 0,
+        verdict: r.result?.ai?.verdict || null,
+        reason: r.result?.ai?.reason || null,
+        positives: r.result?.ai?.positives || [],
+        negatives: r.result?.ai?.negatives || [],
+        error: r.error || null,
+        screenshot: r.screenshot ? {
+          filename: r.screenshot.filename,
+          timestamp: r.screenshot.timestamp,
+          hash: r.screenshot.hash
+        } : null
+      }))
+    })};
+    
+    function toggleScreenshot(index) {
+      const preview = document.getElementById(\`screenshot-\${index}\`);
+      const allPreviews = document.querySelectorAll('.screenshot-preview');
+      
+      // Close all other previews
+      allPreviews.forEach((p, i) => {
+        if (i !== index) p.classList.remove('active');
+      });
+      
+      // Toggle current preview
+      preview.classList.toggle('active');
+      
+      // Scroll into view
+      if (preview.classList.contains('active')) {
+        preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+    
+    function exportToJSON() {
+      const dataStr = JSON.stringify(reportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = \`scamometer-report-\${Date.now()}.json\`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+    
+    // Add hover effect to result cards
+    document.querySelectorAll('.result-card').forEach(card => {
+      card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateX(8px) scale(1.01)';
+      });
+      card.addEventListener('mouseleave', function() {
+        this.style.transform = 'translateX(0) scale(1)';
+      });
+    });
+  </script>
 </body>
 </html>`;
 }

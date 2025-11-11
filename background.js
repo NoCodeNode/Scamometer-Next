@@ -538,9 +538,17 @@ async function processNextBatchUrl() {
   await updateBatchStatus('processing', nextUrl.index, queue.urls.length);
   
   try {
-    // Open URL in background tab
-    const tab = await chrome.tabs.create({ url: nextUrl.url, active: false });
+    // Open URL in a NEW WINDOW (not tab) for better isolation
+    const window = await chrome.windows.create({
+      url: nextUrl.url,
+      focused: false,
+      state: 'minimized',
+      type: 'normal'
+    });
+    
+    const tab = window.tabs[0];
     batchTabId = tab.id;
+    const batchWindowId = window.id;
     
     // Wait for page to load
     await waitForTabLoad(tab.id);
@@ -565,8 +573,8 @@ async function processNextBatchUrl() {
     nextUrl.screenshot = screenshot;
     await chrome.storage.local.set({ 'batch::queue': queue });
     
-    // Close tab
-    await chrome.tabs.remove(tab.id);
+    // Close window (not just tab)
+    await chrome.windows.remove(batchWindowId);
     batchTabId = null;
     
     // Process next after a short delay
@@ -661,8 +669,12 @@ function waitForTabLoad(tabId) {
  */
 async function captureScreenshotWithOverlay(tabId, url) {
   try {
-    // Make sure tab is visible for screenshot
-    await chrome.tabs.update(tabId, { active: true });
+    // Get the tab and make window visible for screenshot
+    const tab = await chrome.tabs.get(tabId);
+    await chrome.windows.update(tab.windowId, { 
+      state: 'normal',
+      focused: true 
+    });
     await new Promise(resolve => setTimeout(resolve, 500));
     
     // Inject overlay with URL and timestamp
@@ -676,17 +688,17 @@ async function captureScreenshotWithOverlay(tabId, url) {
         overlay.style.top = '0';
         overlay.style.left = '0';
         overlay.style.width = '100%';
-        overlay.style.background = 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)';
+        overlay.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
         overlay.style.color = 'white';
-        overlay.style.padding = '12px 16px';
+        overlay.style.padding = '16px 20px';
         overlay.style.zIndex = '2147483647';
-        overlay.style.fontFamily = 'monospace';
-        overlay.style.fontSize = '13px';
-        overlay.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        overlay.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        overlay.style.fontSize = '14px';
+        overlay.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
         overlay.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${url}</div>
-            <div style="margin-left:16px; white-space:nowrap;">${timestamp}</div>
+            <div style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🧪 ${url}</div>
+            <div style="margin-left:20px; white-space:nowrap; font-weight:600;">${timestamp}</div>
           </div>
         `;
         document.body.appendChild(overlay);
@@ -697,12 +709,8 @@ async function captureScreenshotWithOverlay(tabId, url) {
     // Wait for overlay to render
     await new Promise(resolve => setTimeout(resolve, 800));
     
-    // Get the tab's window to ensure it's focused
-    const tab = await chrome.tabs.get(tabId);
-    await chrome.windows.update(tab.windowId, { focused: true });
-    
     // Capture screenshot
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 100 });
     
     // Remove overlay
     await chrome.scripting.executeScript({
@@ -726,17 +734,22 @@ async function captureScreenshotWithOverlay(tabId, url) {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     
-    // Download screenshot
+    // Create filename with timestamp for better organization
+    const hostname = new URL(url).hostname.replace(/[^a-z0-9]/gi, '_');
+    const filename = `${hostname}_${hash.substring(0, 12)}.png`;
+    
+    // Download screenshot to scamometer_reports folder
     await chrome.downloads.download({
       url: dataUrl,
-      filename: `scamometer-${hash}.png`,
+      filename: `scamometer_reports/${filename}`,
       saveAs: false
     });
     
     return {
       hash,
       timestamp,
-      filename: `scamometer-${hash}.png`
+      filename: filename,
+      dataUrl: dataUrl // Include dataUrl for embedding in HTML report
     };
   } catch (error) {
     console.error('Screenshot capture failed:', error);
